@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomApplication xmlns="http://soap.sforce.com/2006/04/metadata">
+    <label>Ops Toolkit</label>
+    <description>Field operations workspace for the Ops Toolkit package.</description>
+    <navType>Standard</navType>
+    <uiType>Lightning</uiType>
+    <formFactors>Large</formFactors>
+    <tabs>standard-home</tabs>
+    <tabs>Service_Request__c</tabs>
+    <tabs>standard-Account</tabs>
+</CustomApplication>

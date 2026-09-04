@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<PermissionSet xmlns="http://soap.sforce.com/2006/04/metadata">
+    <label>Ops Toolkit Field Ops User</label>
+    <description>Adds the Field Ops console on top of Ops Toolkit Core User. Assign BOTH permission sets.</description>
+    <hasActivationRequired>false</hasActivationRequired>
+    <classAccesses>
+        <apexClass>ServiceRequestConsoleController</apexClass>
+        <enabled>true</enabled>
+    </classAccesses>
+    <applicationVisibilities>
+        <application>Ops_Toolkit</application>
+        <visible>true</visible>
+    </applicationVisibilities>
+</PermissionSet>

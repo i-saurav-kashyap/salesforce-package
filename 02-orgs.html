@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>How Many Orgs Do I Actually Need? &middot; AppExchange From Zero</title>
+<link rel="stylesheet" href="assets/site.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<button class="navtoggle" aria-label="Toggle navigation">&#9776; Contents</button>
+<div class="shell">
+<nav class="sidenav" id="sidenav">
+  <div class="brand">
+    <span class="brand-mark">SF</span>
+    <span class="brand-text">AppExchange<br><b>From Zero</b></span>
+  </div>
+  <ol class="navlist">
+    <li><a href="index.html">Start here</a></li>
+    <li><a href="01-big-picture.html">1 &middot; Big picture</a></li>
+    <li class="here"><a href="02-orgs.html">2 &middot; Org architecture</a></li>
+    <li><a href="03-prereqs.html">3 &middot; Prerequisites</a></li>
+    <li><a href="04-the-app.html">4 &middot; The app</a></li>
+    <li><a href="05-1gp.html">5 &middot; 1GP concepts</a></li>
+    <li><a href="06-1gp-lifecycle.html">6 &middot; 1GP lifecycle</a></li>
+    <li><a href="07-2gp.html">7 &middot; 2GP concepts</a></li>
+    <li><a href="08-2gp-build.html">8 &middot; 2GP build</a></li>
+    <li><a href="09-scratch-orgs.html">9 &middot; Scratch orgs</a></li>
+    <li><a href="10-compare.html">10 &middot; 1GP vs 2GP</a></li>
+    <li><a href="11-dependencies.html">11 &middot; Dependencies</a></li>
+    <li><a href="12-install.html">12 &middot; Install &amp; upgrade</a></li>
+    <li><a href="13-security.html">13 &middot; Security Review</a></li>
+    <li><a href="14-cicd.html">14 &middot; CI/CD</a></li>
+    <li><a href="15-appexchange.html">15 &middot; AppExchange</a></li>
+    <li><a href="16-day-plan.html">16 &middot; Day-by-day plan</a></li>
+    <li><a href="17-debugging.html">17 &middot; Debug drills</a></li>
+    <li><a href="17b-error-index.html">17b &middot; Error index</a></li>
+    <li><a href="18-backend.html">18 &middot; Behind the scenes</a></li>
+    <li><a href="19-commands.html">19 &middot; Command cheat sheet</a></li>
+    <li><a href="20-quiz.html">20 &middot; Knowledge test</a></li>
+  </ol>
+  <div class="navfoot">
+    <p>Local course site.<br>Regenerate with <code>python3 build.py</code></p>
+  </div>
+</nav>
+<main id="main">
+  <header class="pagehead">
+    <p class="kicker">Part 2</p>
+    <h1>How Many Orgs Do I Actually Need?</h1>
+  </header>
+  <p class="lead">&ldquo;You need several orgs&rdquo; is useless advice. Here is exactly which orgs exist, who
+creates each one, who owns it, how you authenticate, what is stored in it, how long it lives, and what
+breaks if it disappears.</p>
+
+<h2>The master table</h2>
+<div class="tablewrap">
+<table>
+<thead><tr><th>Org</th><th>Purpose</th><th>Required?</th><th>1GP</th><th>2GP</th><th>Lifetime</th><th>Source of truth for&hellip;</th></tr></thead>
+<tbody>
+<tr><td><b>Partner Business Org</b></td><td>Commercial home: Publishing Console, Environment Hub, LMA, Trialforce</td><td>Only to list on AppExchange / pass Security Review</td><td>✔</td><td>✔</td><td>Permanent (company asset)</td><td>Listings, licences, subscribers</td></tr>
+<tr><td><b>Dev Hub</b> (a feature in the PBO or a DE org)</td><td>Creates scratch orgs; owns 2GP packages and versions</td><td>Mandatory for 2GP</td><td>✘</td><td>✔</td><td>Permanent</td><td>Package identity (<code>0Ho</code>), version records, ancestry</td></tr>
+<tr><td><b>Namespace org</b> (DE)</td><td>Holds the registered namespace</td><td>Mandatory for any managed package</td><td>✔ (doubles as packaging org)</td><td>✔ (linked to Dev Hub)</td><td>Permanent &mdash; irreplaceable</td><td>The namespace</td></tr>
+<tr><td><b>1GP packaging org</b></td><td>Defines the 1GP package and mints its versions</td><td>Mandatory for 1GP</td><td>✔</td><td>✘</td><td>Permanent &mdash; irreplaceable</td><td><b>The package contents themselves</b></td></tr>
+<tr><td><b>Patch development org</b></td><td>Build a patch (x.y.<b>z</b>) off a released 1GP version</td><td>Only when patching 1GP</td><td>✔</td><td>✘</td><td>Temporary (per patch)</td><td>Nothing &mdash; derived from packaging org</td></tr>
+<tr><td><b>Scratch org (dev)</b></td><td>Where you write and test code daily</td><td>Strongly recommended</td><td>optional</td><td>✔</td><td>1&ndash;30 days</td><td>Nothing &mdash; Git is the truth</td></tr>
+<tr><td><b>Scratch org (install test)</b></td><td>Install the <code>04t</code> as a customer would</td><td>Yes &mdash; non-negotiable in practice</td><td>✔</td><td>✔</td><td>Hours to days</td><td>Nothing</td></tr>
+<tr><td><b>DE development org</b></td><td>Long-lived dev org when scratch orgs can't be used (1GP shops, orgs needing manual setup)</td><td>Situational</td><td>✔</td><td>rare</td><td>Permanent-ish</td><td>Nothing, ideally</td></tr>
+<tr><td><b>QA org</b></td><td>Stable target where QA runs regression against a specific version</td><td>Team practice</td><td>✔</td><td>✔</td><td>Weeks/months</td><td>Test data</td></tr>
+<tr><td><b>UAT / demo org</b></td><td>Sales demos, customer acceptance, screenshots for the listing</td><td>Team practice</td><td>✔</td><td>✔</td><td>Long-lived</td><td>Demo data + branding</td></tr>
+<tr><td><b>Subscriber / customer org</b></td><td>Where the product actually runs</td><td>Real world</td><td>✔</td><td>✔</td><td>Forever, not yours</td><td>Customer's data &mdash; sacred</td></tr>
+<tr><td><b>Trialforce source org / template</b></td><td>Powers &ldquo;Try it free&rdquo; on the listing</td><td>Only for self-service trials</td><td>✔</td><td>✔</td><td>Long-lived; templates versioned</td><td>Trial content &amp; branding</td></tr>
+</tbody>
+</table>
+</div>
+
+<h2>Org-by-org deep dive</h2>
+
+<h3>Partner Business Org</h3>
+<div class="tablewrap"><table><tbody>
+<tr><th>Who creates it</th><td>Salesforce, when your <b>company</b> is approved into the Partner Program (partners.salesforce.com). Not something an individual spins up.</td></tr>
+<tr><th>Who owns it</th><td>Your company. Usually administered by an ISV ops / alliances team.</td></tr>
+<tr><th>How you authenticate</th><td>Named user + MFA in the browser; <code>sf org login web --alias pbo</code> for CLI work.</td></tr>
+<tr><th>What is stored</th><td>Publishing Console data (Provider, Solutions, Listings), Environment Hub org list, LMA licence records, Trialforce config, and often the Dev Hub.</td></tr>
+<tr><th>Who interacts</th><td>Product/marketing (listing), engineering leads (Dev Hub, Security Review submissions), support (subscriber access).</td></tr>
+<tr><th>Lifetime</th><td>As long as the company sells the product.</td></tr>
+<tr><th>If it disappears</th><td>Catastrophic-but-recoverable-with-Salesforce: listings, licence records and Security Review history live here. There is no self-service rebuild &mdash; you open a Partner Support case. <span class="badge b-unk">Verify</span></td></tr>
+</tbody></table></div>
+
+<h3>Dev Hub</h3>
+<div class="tablewrap"><table><tbody>
+<tr><th>Who creates it</th><td>You, by toggling <b>Setup &rarr; Dev Hub &rarr; Enable Dev Hub</b> in an existing org (PBO for real products; a free DE org for learning).</td></tr>
+<tr><th>Who owns it</th><td>The org's owner. Developers need the <b>Create and Update Second-Generation Packages</b> permission plus API access.</td></tr>
+<tr><th>How you authenticate</th><td><code>sf org login web --alias devhub --set-default-dev-hub</code>. For CI: a JWT bearer flow with a Connected App and a private key &mdash; never a password.</td></tr>
+<tr><th>What is stored</th><td><code>ScratchOrgInfo</code> (every scratch org you ever made), <code>Package2</code>, <code>Package2Version</code>, <code>Package2VersionCreateRequest</code>, namespace registry links.</td></tr>
+<tr><th>Lifetime</th><td>Permanent. Enabling is irreversible.</td></tr>
+<tr><th>If it disappears</th><td>You lose the ability to create new versions of your 2GP packages. <b>Existing installed versions keep working</b> for customers (the <code>04t</code> lives in Salesforce's package infrastructure, not in your Dev Hub) <span class="badge b-inf">Inference</span>, but you cannot ship an upgrade. Treat the Dev Hub as production infrastructure.</td></tr>
+</tbody></table></div>
+<div class="warn"><p><b>Learning trap:</b> do not enable Dev Hub in a throwaway org you will abandon,
+then create your real packages there. Package identity is bound to that Dev Hub. Choose the Dev Hub org
+deliberately &mdash; for a real product, the PBO.</p></div>
+
+<h3>Namespace org (Developer Edition)</h3>
+<div class="tablewrap"><table><tbody>
+<tr><th>Who creates it</th><td>You: developer.salesforce.com/signup.</td></tr>
+<tr><th>How the namespace gets there</th><td>In that org: <b>Setup &rarr; Package Manager</b> (older UI: &ldquo;Packages&rdquo;) &rarr; <b>Edit</b> next to Developer Settings &rarr; enter and check a namespace &rarr; Review &rarr; Save. <span class="badge b-doc">Documented</span> Irreversible.</td></tr>
+<tr><th>What is stored</th><td>The namespace registration. For 1GP, also the entire package. For 2GP, nothing else &mdash; keep it empty and pristine.</td></tr>
+<tr><th>How 2GP uses it</th><td>You link it to the Dev Hub once: <code>sf org login web --alias nsorg</code> then, in the Dev Hub UI, <b>Namespace Registries &rarr; Link Namespace</b> (or <code>sf package:create</code> fails with &ldquo;namespace not linked&rdquo;).</td></tr>
+<tr><th>Lifetime</th><td>Forever. Log in occasionally so it is not deactivated for inactivity.</td></tr>
+<tr><th>If it disappears</th><td><b>2GP:</b> you can no longer create versions in that namespace; recovery means a Partner Support case <span class="badge b-unk">Verify</span>. <b>1GP:</b> you have lost the package. This is why 1GP shops guard the packaging org like a production database.</td></tr>
+</tbody></table></div>
+
+<h3>1GP packaging org <span class="badge b-1gp">1GP</span></h3>
+<div class="tablewrap"><table><tbody>
+<tr><th>Who creates it</th><td>You &mdash; it is simply the DE org where you registered the namespace and then created a package in Package Manager.</td></tr>
+<tr><th>What is stored</th><td><b>The package definition and every component in it.</b> Uploaded versions are snapshots of this org's state.</td></tr>
+<tr><th>How you interact</th><td>Browser (Package Manager, Upload) plus metadata deploys from your laptop: <code>sf project deploy start --target-org pkgorg</code>.</td></tr>
+<tr><th>Who else touches it</th><td>Ideally nobody. Every developer deploying straight into it is how 1GP orgs rot.</td></tr>
+<tr><th>Lifetime</th><td>The life of the product.</td></tr>
+<tr><th>If it disappears</th><td>You cannot create another version of that package, ever. Customers keep what they installed. Mitigation: keep a full metadata retrieve in Git and back it up; the org itself is still irreplaceable.</td></tr>
+</tbody></table></div>
+
+<h3>Scratch orgs</h3>
+<div class="tablewrap"><table><tbody>
+<tr><th>Who creates them</th><td>The Dev Hub, on your request: <code>sf org create scratch</code>.</td></tr>
+<tr><th>How you authenticate</th><td>Automatically &mdash; the CLI receives credentials and stores an alias. No password to manage.</td></tr>
+<tr><th>What is stored</th><td>Only what you push plus test data. <b>Treat everything in a scratch org as disposable.</b></td></tr>
+<tr><th>Lifetime</th><td>1&ndash;30 days (<code>--duration-days</code>). They die silently; that is the point.</td></tr>
+<tr><th>If one disappears</th><td>Nothing is lost if you have been committing. If losing a scratch org hurts, your process is wrong.</td></tr>
+</tbody></table></div>
+
+<h3>Install-test org (customer-like)</h3>
+<p>A scratch org (or spare DE org) that <b>has never had your source pushed into it</b>. You install the
+<code>04t</code> and use the app. This is the only way to catch:</p>
+<ul>
+<li>components you forgot to add to the package (they exist in your dev org, so it &ldquo;works&rdquo; there),</li>
+<li>permission sets that don't actually grant access to packaged objects,</li>
+<li>namespace-sensitive code (hard-coded field names without the namespace, dynamic SOQL, JS referencing API names),</li>
+<li>missing dependencies.</li>
+</ul>
+<div class="tip"><p><b>Rule:</b> ship nothing you have not installed into a clean org and clicked through
+as a non-admin user.</p></div>
+
+<h3>QA / UAT / demo orgs</h3>
+<p>Longer-lived orgs where a specific released version sits still while people test or demo it. They
+usually contain realistic data, which is exactly what a scratch org is bad at. Created from the
+Environment Hub (partner DE/enterprise-edition test orgs) or as long-duration scratch orgs.
+<span class="badge b-unk">Verify</span> which test-org types your partner tier entitles you to.</p>
+
+<h3>Subscriber org</h3>
+<p>You never build here. You can, with the customer's consent, use <b>Subscriber Support</b> from the LMA
+to log in read-mostly and debug. Expect: other managed packages, different profiles, large data volumes,
+custom validation rules that break your DML, and field-level security that hides fields your code assumes.</p>
+
+<h2>Minimum setup (learning &mdash; what you will use in this course)</h2>
+<pre class="diagram">DE org #1  ──  Dev Hub enabled          (alias: devhub)
+   │              └── creates scratch orgs, owns the 2GP packages
+   │
+DE org #2  ──  namespace registered     (alias: nsorg)
+   │              └── linked to devhub as a Namespace Registry
+   │              └── ALSO used as the 1GP packaging org for the learning exercise
+   │
+scratch: dev1  (namespaced, 7 days)     ← daily development
+scratch: test1 (NON-namespaced, 1 day)  ← install the 04t here</pre>
+<p>Two permanent free orgs, plus disposable scratch orgs. Total cost: nothing.</p>
+<div class="note"><p><b>Course simplification, stated plainly:</b> using the same DE org as both the
+2GP namespace org and the 1GP packaging org is fine for learning and lets you compare the two models
+with one namespace. In a real company you would use <b>separate namespaces</b> (e.g. <code>opskit</code>
+for 2GP, <code>opskitlegacy</code> for the 1GP exercise), because a namespace already in use by a released
+1GP package brings its own constraints. <span class="badge b-unk">Verify</span> the current rules for
+reusing a 1GP namespace for 2GP packages &mdash; Salesforce supports it (that is how ISVs migrate), but the
+constraints around ancestry and shared namespaces are worth confirming for your exact case.</p></div>
+
+<h2>Professional setup (what a real ISV runs)</h2>
+<pre class="diagram">                       PARTNER BUSINESS ORG  (permanent, company-owned)
+                       ├── Dev Hub                 → packages, versions, scratch org limits
+                       ├── Environment Hub         → provisions/tracks every other org
+                       ├── License Management App  → who installed what, licence control
+                       └── Publishing Console      → Provider, Solutions, Listings, Security Review
+                                  │
+      ┌───────────────────────────┼──────────────────────────────┐
+      │                           │                              │
+ Namespace org(s) (DE)     Scratch org fleet               Long-lived orgs
+  · one per namespace       · dev-&lt;initials&gt;  (namespaced)  · QA org (installed 04t + data)
+  · linked to Dev Hub       · ci-pr-&lt;number&gt;  (per PR)      · UAT/demo org
+  · never developed in      · install-test    (clean)       · Trialforce source org
+                            · created + destroyed by CI     · legacy 1GP packaging org
+                                                            · patch dev org (transient)
+                                  │
+                          GitHub (the actual source of truth)
+                           main → release branches → tags = package versions</pre>
+<h3>Team conventions worth copying</h3>
+<ul>
+<li><b>One Dev Hub per company</b>, not per team. Package identity should not depend on who set it up.</li>
+<li><b>Nobody develops in the namespace org.</b> Its only job is to exist.</li>
+<li><b>CI owns scratch org creation</b>; developers create their own only for local work.</li>
+<li><b>Every released version is a Git tag</b> and the <code>04t</code> is recorded in the repo
+(<code>sfdx-project.json</code> package aliases do this automatically &mdash; commit them).</li>
+<li><b>The install-test org is non-namespaced</b>, so you experience your own namespace prefixes exactly as a customer does.</li>
+<li><b>Dev Hub auth in CI is JWT</b> with the private key in a secret store, never a username/password.</li>
+</ul>
+
+<h2>Verification for this page</h2>
+<ul class="check">
+<li>You can name the four orgs in the minimum setup and what each one owns</li>
+<li>You can explain why losing a 1GP packaging org is worse than losing a Dev Hub</li>
+<li>You can explain why the install-test org must be non-namespaced</li>
+<li>You have decided which org will be your Dev Hub and which will own your namespace &mdash; and written it down</li>
+</ul>
+
+  <nav class="pager"><a class="prev" href="01-big-picture.html"><span>Previous</span>1 &middot; Big picture</a><a class="next" href="03-prereqs.html"><span>Next</span>3 &middot; Prerequisites</a></nav>
+  <footer class="sitefoot">
+    <p>Built as a personal learning course. Salesforce behaviour changes between releases &mdash;
+    always confirm against <a href="https://developer.salesforce.com/docs/atlas.en-us.sfdx_dev.meta/sfdx_dev/">Salesforce DX Developer Guide</a>
+    and the <a href="https://developer.salesforce.com/docs/atlas.en-us.packagingGuide.meta/packagingGuide/">ISVforce / Packaging guides</a>
+    before you rely on a detail in production.</p>
+  </footer>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

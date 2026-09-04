@@ -1,0 +1,729 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Break It On Purpose &middot; AppExchange From Zero</title>
+<link rel="stylesheet" href="assets/site.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<button class="navtoggle" aria-label="Toggle navigation">&#9776; Contents</button>
+<div class="shell">
+<nav class="sidenav" id="sidenav">
+  <div class="brand">
+    <span class="brand-mark">SF</span>
+    <span class="brand-text">AppExchange<br><b>From Zero</b></span>
+  </div>
+  <ol class="navlist">
+    <li><a href="index.html">Start here</a></li>
+    <li><a href="01-big-picture.html">1 &middot; Big picture</a></li>
+    <li><a href="02-orgs.html">2 &middot; Org architecture</a></li>
+    <li><a href="03-prereqs.html">3 &middot; Prerequisites</a></li>
+    <li><a href="04-the-app.html">4 &middot; The app</a></li>
+    <li><a href="05-1gp.html">5 &middot; 1GP concepts</a></li>
+    <li><a href="06-1gp-lifecycle.html">6 &middot; 1GP lifecycle</a></li>
+    <li><a href="07-2gp.html">7 &middot; 2GP concepts</a></li>
+    <li><a href="08-2gp-build.html">8 &middot; 2GP build</a></li>
+    <li><a href="09-scratch-orgs.html">9 &middot; Scratch orgs</a></li>
+    <li><a href="10-compare.html">10 &middot; 1GP vs 2GP</a></li>
+    <li><a href="11-dependencies.html">11 &middot; Dependencies</a></li>
+    <li><a href="12-install.html">12 &middot; Install &amp; upgrade</a></li>
+    <li><a href="13-security.html">13 &middot; Security Review</a></li>
+    <li><a href="14-cicd.html">14 &middot; CI/CD</a></li>
+    <li><a href="15-appexchange.html">15 &middot; AppExchange</a></li>
+    <li><a href="16-day-plan.html">16 &middot; Day-by-day plan</a></li>
+    <li class="here"><a href="17-debugging.html">17 &middot; Debug drills</a></li>
+    <li><a href="17b-error-index.html">17b &middot; Error index</a></li>
+    <li><a href="18-backend.html">18 &middot; Behind the scenes</a></li>
+    <li><a href="19-commands.html">19 &middot; Command cheat sheet</a></li>
+    <li><a href="20-quiz.html">20 &middot; Knowledge test</a></li>
+  </ol>
+  <div class="navfoot">
+    <p>Local course site.<br>Regenerate with <code>python3 build.py</code></p>
+  </div>
+</nav>
+<main id="main">
+  <header class="pagehead">
+    <p class="kicker">Part 17</p>
+    <h1>Break It On Purpose</h1>
+  </header>
+  <p class="lead">Thirty failures, staged on purpose, in the order you will actually meet them. Each one is
+a small story: the error, what you will <i>wrongly</i> conclude, what is really happening, how to prove it,
+the fix, and how to make sure it never happens twice.</p>
+
+<div class="note"><p><b>How to work this page.</b> Read the error, then answer the <b>Think first</b>
+prompt out loud before you open the solution. Guessing at a Salesforce error costs minutes; reasoning
+about it costs seconds and teaches you the platform. Error wording varies by CLI and API version &mdash;
+match on the <i>shape</i> of the message, not the exact string. If you just want a lookup table, go to the
+<a href="17b-error-index.html">Error field guide</a>.</p></div>
+
+<h2>The first 60 seconds: triage before theory</h2>
+<p>Almost every packaging mystery collapses once you answer five questions in order. Do this <b>before</b>
+you start editing anything.</p>
+<pre class="diagram"> 1. WHICH ORG did that command actually talk to?
+       sf org list --all        → is the default what you assumed?
+       (roughly half of all &quot;impossible&quot; errors die right here)
+              │
+ 2. WHICH LAYER failed?
+       source → deploy → package build → install → upgrade → runtime
+       Each layer has different causes and different logs. Name the layer out loud.
+              │
+ 3. WHAT DOES THE AUTHORITATIVE RECORD SAY?
+       The CLI prints a summary. Salesforce stores the truth:
+         ScratchOrgInfo.ErrorCode              (scratch org creation)
+         Package2VersionCreateRequest.Error    (2GP version build)
+         deploy result / PackageInstallRequest (deploy + install)
+              │
+ 4. WHAT DOES THE FAILING ENVIRONMENT LACK that mine has?
+       Build env: no seed data, no manual org config, only declared dependencies.
+       Customer org: no admin rights, no unpackaged components, other packages present.
+              │
+ 5. CAN I REPRODUCE IT IN A FRESH ORG?
+       Yes → it is in your source.  No → the org is the variable.</pre>
+
+<h2>How to read a Salesforce error</h2>
+<p>Salesforce errors have a consistent anatomy once you see it. Take this one:</p>
+<div class="codewrap err"><div class="codebar"><span>error</span><button class="copy" type="button">Copy</button></div><pre class="code"><code>Ops_Core_User: In field: field - no CustomField named Service_Request__c.Resolution_Notes__c found
+ └────┬─────┘   └──────────────┬──────────────────────────────────────────────────────────────┘
+   the component               what it needed and could not find
+   that FAILED                 (the thing that is MISSING)</code></pre></div>
+<p><b>Read it backwards.</b> The component named first is the <i>victim</i>; the thing at the end is the
+<i>cause</i>. Beginners open the permission set and stare at it; the fix is almost always to supply the
+missing field. The same shape appears everywhere:</p>
+<div class="tablewrap">
+<table class="decoder">
+<thead><tr><th>Error code you will see</th><th>What it really means</th></tr></thead>
+<tbody>
+<tr><td>INVALID_CROSS_REFERENCE_KEY</td><td>&ldquo;You pointed at something that isn't here.&rdquo; A component references metadata not present in this org/deployment.</td></tr>
+<tr><td>FIELD_CUSTOM_VALIDATION_EXCEPTION</td><td>A validation rule fired &mdash; possibly <b>the subscriber's</b>, not yours. Very common inside packaged DML.</td></tr>
+<tr><td>INSUFFICIENT_ACCESS_ON_CROSS_REFERENCE_ENTITY</td><td>The user can touch the record but not something it points to (a lookup target, a parent). Permission model, not code.</td></tr>
+<tr><td>FIELD_INTEGRITY_EXCEPTION</td><td>Value is the wrong shape for the field &mdash; picklist value not in the value set, bad ID type.</td></tr>
+<tr><td>UNABLE_TO_LOCK_ROW</td><td>Row-lock contention. Usually your trigger/queueable fighting the subscriber's automation over the same parent record.</td></tr>
+<tr><td>MIXED_DML_OPERATION</td><td>You touched setup objects (User, PermissionSetAssignment) and normal objects in one transaction. Split with <code>System.runAs</code> in tests or an async call in production.</td></tr>
+<tr><td>UNEXPECTED_TOKEN / Invalid type</td><td>Apex compile failure. During a package build this nearly always means <b>a missing dependency declaration</b>.</td></tr>
+<tr><td>ENTITY_IS_DELETED</td><td>You are working with an ID that no longer exists &mdash; frequently a hard-coded ID that only ever existed in your dev org.</td></tr>
+<tr><td>REQUEST_LIMIT_EXCEEDED / LIMIT_EXCEEDED</td><td>Org limit, not code bug. Check <code>sf org list limits</code> before you refactor anything.</td></tr>
+<tr><td>DUPLICATE_VALUE</td><td>A unique field or a duplicate developer name &mdash; classic on re-running seed scripts.</td></tr>
+</tbody>
+</table>
+</div>
+
+<h2>Jump to a drill</h2>
+<div class="jump">
+<a href="#a"><b>A. Auth &amp; CLI</b>1&ndash;4: aliases, two CLIs, tokens, defaults</a>
+<a href="#b"><b>B. Scratch orgs</b>5&ndash;8: features, limits, expiry, tracking</a>
+<a href="#c"><b>C. Deploy</b>9&ndash;12: cross-references, order, namespace, conflicts</a>
+<a href="#d"><b>D. Package build</b>13&ndash;18: the build environment's blind spots</a>
+<a href="#e"><b>E. Install</b>19&ndash;22: dependencies, keys, betas, editions</a>
+<a href="#f"><b>F. Upgrade</b>23&ndash;25: data, ancestry, post-install scripts</a>
+<a href="#g"><b>G. Runtime in a customer org</b>26&ndash;28: permissions, namespace, limits</a>
+<a href="#h"><b>H. CI &amp; process</b>29&ndash;30: secrets, drift</a>
+</div>
+
+<div class="phase" id="a"><h2>A &middot; Authentication and the CLI</h2><span>Cheap to fix, expensive to misdiagnose</span></div>
+
+<h3 id="d1">Drill 1 &mdash; &ldquo;No authorization information found&rdquo;</h3>
+<p class="drillmeta"><span class="hot">Very common</span><span>Cost: minutes</span><span>Layer: local</span></p>
+<div class="codewrap err"><div class="codebar"><span>error</span><button class="copy" type="button">Copy</button></div><pre class="code"><code>$ sf project deploy start --target-org dev1
+Error (1): No authorization information found for dev1.</code></pre></div>
+<div class="think"><b>Think first:</b> the org still exists in Salesforce. So what exactly is missing, and
+where does it live?</div>
+<details><summary>Root cause, investigation, fix</summary>
+<p><b>What is missing is local.</b> Authorisation is a refresh token in a file on <i>this laptop</i>. Four
+things remove it: the alias was never created here; the scratch org expired; the token was revoked
+(password change, admin revoke, org deleted); or you have two CLIs reading two different config folders.</p>
+<div class="codewrap"><div class="codebar"><span>bash</span><button class="copy" type="button">Copy</button></div><pre class="code"><code>sf org list --all        # is dev1 listed? Expired? Status &quot;Connected&quot;?
+sf org display --target-org dev1
+which -a sf sfdx         # two binaries = two auth stores = endless confusion
+ls ~/.sfdx ~/.sf 2&gt;/dev/null</code></pre></div>
+<p><b>Fix:</b> <code>sf org login web --alias dev1</code>, or recreate the scratch org. If <code>sfdx</code> v7
+is present, <code>npm uninstall --global sfdx-cli</code> and re-authenticate.</p>
+<p><b>Prevent:</b> one CLI. Scripts that <i>create</i> orgs rather than assume them. JWT in CI so no human
+token is ever involved.</p>
+<div class="why"><p><b>Deeper knowledge.</b> Salesforce never gives the CLI your password. The web login
+returns an authorisation code, which the CLI swaps for an <b>access token</b> (short-lived, ~2 hours) and a
+<b>refresh token</b> (long-lived). Every command silently uses the refresh token to mint a new access token.
+That is why revoking a session in Setup &rarr; Connected Apps kills your CLI instantly, and why an access
+token pasted into a script stops working the same afternoon.</p></div>
+</details>
+
+<h3 id="d2">Drill 2 &mdash; The command worked yesterday and hits the wrong org today</h3>
+<p class="drillmeta"><span class="hot">Very common</span><span>Cost: minutes&ndash;hours</span><span>Layer: local</span></p>
+<div class="codewrap err"><div class="codebar"><span>error</span><button class="copy" type="button">Copy</button></div><pre class="code"><code>$ sf project deploy start
+Deploying to  customer1@example.com    ← you meant dev1, and you just pushed source into your install-test org</code></pre></div>
+<div class="think"><b>Think first:</b> which invisible piece of state decided that?</div>
+<details><summary>Solution</summary>
+<p><b>Root cause:</b> the default target org. <code>--set-default</code> on a later
+<code>sf org create scratch</code> silently moved it. Defaults are stored per project in
+<code>.sf/config.json</code> and globally in <code>~/.sf/config.json</code>.</p>
+<div class="codewrap"><div class="codebar"><span>bash</span><button class="copy" type="button">Copy</button></div><pre class="code"><code>sf config list                      # project + global defaults
+sf config get target-org target-dev-hub
+sf config set target-org dev1       # project-local</code></pre></div>
+<p><b>Fix:</b> set it explicitly, and re-create the polluted org if you pushed source into a customer-like
+org (it is no longer a clean install test &mdash; it now has unpackaged components).</p>
+<p><b>Prevent:</b> <b>never rely on defaults in anything you commit.</b> Every script and CI step passes
+<code>--target-org</code> / <code>--target-dev-hub</code> explicitly. Defaults are for interactive typing only.</p>
+</details>
+
+<h3 id="d3">Drill 3 &mdash; JWT login works locally, fails in CI</h3>
+<p class="drillmeta"><span class="warm">Common on day one of CI</span><span>Cost: hours</span><span>Layer: CI</span></p>
+<div class="codewrap err"><div class="codebar"><span>error</span><button class="copy" type="button">Copy</button></div><pre class="code"><code>Error: We can&#x27;t authenticate the user. Verify that the user is authorized in the connected app,
+or that the certificate is correct.  (invalid_grant / user hasn&#x27;t approved this consumer)</code></pre></div>
+<div class="think"><b>Think first:</b> JWT has four moving parts. Which one is different between your
+laptop and the runner?</div>
+<details><summary>Solution</summary>
+<p><b>The four parts:</b> the Connected App's consumer key, the private key, the username, and the
+<b>pre-authorisation</b> of that user. Ranked causes:</p>
+<ol>
+<li><b>Newline mangling in the secret.</b> The PEM was pasted into GitHub without its line breaks, so
+<code>server.key</code> in the runner is not a valid key. This is the number-one cause.</li>
+<li><b>User not pre-authorised:</b> Connected App &rarr; Manage &rarr; Edit Policies &rarr; Permitted Users =
+<i>Admin approved users are pre-authorized</i>, and the user's profile/permission set is assigned to the app.</li>
+<li><b>Wrong login URL:</b> sandbox users need <code>--instance-url https://test.salesforce.com</code>.</li>
+<li><b>Certificate mismatch:</b> the <code>.crt</code> uploaded to the app is not the pair of the <code>.key</code>
+in your secret.</li>
+</ol>
+<div class="codewrap"><div class="codebar"><span>bash</span><button class="copy" type="button">Copy</button></div><pre class="code"><code># In the runner, prove the key survived transport before blaming Salesforce:
+openssl rsa -in server.key -check -noout
+head -1 server.key           # must be -----BEGIN RSA PRIVATE KEY----- (or BEGIN PRIVATE KEY)</code></pre></div>
+<p><b>Prevent:</b> store the PEM base64-encoded and decode in the workflow, or use a secret store that
+preserves newlines; test the exact same key locally before committing the workflow.</p>
+</details>
+
+<h3 id="d4">Drill 4 &mdash; API version mismatch</h3>
+<p class="drillmeta"><span class="cool">Occasional</span><span>Cost: minutes</span><span>Layer: deploy</span></p>
+<div class="codewrap err"><div class="codebar"><span>error</span><button class="copy" type="button">Copy</button></div><pre class="code"><code>Error: INVALID_TYPE: This type of object is not available for this version of the API</code></pre></div>
+<details><summary>Solution</summary>
+<p><b>Root cause:</b> <code>sourceApiVersion</code> in <code>sfdx-project.json</code>, or the
+<code>apiVersion</code> in a <code>-meta.xml</code>, is <b>newer</b> than the org supports (or older than the
+metadata type requires). Scratch orgs get the newest release first; a customer sandbox on the previous
+release does not.</p>
+<div class="codewrap"><div class="codebar"><span>bash</span><button class="copy" type="button">Copy</button></div><pre class="code"><code>grep sourceApiVersion sfdx-project.json
+sf org display --target-org dev1 --verbose | grep -i api</code></pre></div>
+<p><b>Fix:</b> pin <code>sourceApiVersion</code> to a version every target org supports. <b>Prevent:</b> keep
+one API version across the repo and bump it deliberately, in its own commit, after a release &mdash; never
+mid-feature.</p>
+</details>
+
+<div class="phase" id="b"><h2>B &middot; Scratch orgs</h2><span>Where a bad afternoon usually starts</span></div>
+
+<h3 id="d5">Drill 5 &mdash; Dev Hub not enabled (or not the one you think)</h3>
+<p class="drillmeta"><span class="hot">Day-one classic</span><span>Cost: minutes</span><span>Layer: Dev Hub</span></p>
+<div class="codewrap err"><div class="codebar"><span>error</span><button class="copy" type="button">Copy</button></div><pre class="code"><code>$ sf org create scratch -f config/project-scratch-def.json -a dev1
+Error: The org needs to be enabled as a Dev Hub before you can create scratch orgs.</code></pre></div>
+<details><summary>Solution</summary>
+<p>Two candidate causes, and the test distinguishes them instantly:</p>
+<div class="codewrap"><div class="codebar"><span>bash</span><button class="copy" type="button">Copy</button></div><pre class="code"><code>sf org list --all                 # which org carries the (D) default-dev-hub marker?
+sf data query --target-org devhub --query &quot;SELECT Id FROM ScratchOrgInfo LIMIT 1&quot;</code></pre></div>
+<p>If the query errors with <code>sObject type 'ScratchOrgInfo' is not supported</code>, Dev Hub really is
+off &rarr; Setup &rarr; Dev Hub &rarr; Enable (irreversible, and also enable <b>Unlocked and Second-Generation
+Managed Packages</b> while you are there). If the query works, you simply targeted the wrong org.</p>
+<div class="why"><p><b>Deeper knowledge.</b> &ldquo;Dev Hub&rdquo; is not a product or an org type &mdash; it is a
+<b>capability flag</b> on an ordinary org that exposes a set of objects (<code>ScratchOrgInfo</code>,
+<code>Package2</code>, <code>Package2Version</code>&hellip;). That is why the SOQL test above is the definitive
+check: the objects either exist or they do not.</p></div>
+</details>
+
+<h3 id="d6">Drill 6 &mdash; Scratch org creation fails on a feature name</h3>
+<p class="drillmeta"><span class="warm">Common</span><span>Cost: minutes</span><span>Layer: Dev Hub</span></p>
+<div class="codewrap err"><div class="codebar"><span>error</span><button class="copy" type="button">Copy</button></div><pre class="code"><code>Error: The feature &#x27;PersonAccount&#x27; is not valid.</code></pre></div>
+<div class="think"><b>Think first:</b> the CLI message is short. Where is the long version stored?</div>
+<details><summary>Solution</summary>
+<p><b>Root cause:</b> feature names are exact strings that change between releases (here:
+<code>PersonAccounts</code>, plural). Some features also require a specific edition, or conflict with
+another feature.</p>
+<div class="codewrap"><div class="codebar"><span>bash</span><button class="copy" type="button">Copy</button></div><pre class="code"><code>sf data query --target-org devhub --query &quot;SELECT SignupUsername, Status, ErrorCode, Description \
+FROM ScratchOrgInfo ORDER BY CreatedDate DESC LIMIT 3&quot;</code></pre></div>
+<p>That <code>ScratchOrgInfo</code> row holds the real, detailed error &mdash; always richer than the CLI line.</p>
+<p><b>Prevent:</b> keep definition files minimal. Add one feature at a time and commit each working
+state, so a broken org definition is always a one-line diff.</p>
+</details>
+
+<h3 id="d7">Drill 7 &mdash; &ldquo;Maximum number of active scratch orgs&rdquo;</h3>
+<p class="drillmeta"><span class="hot">Blocks whole teams</span><span>Cost: hours if unmanaged</span><span>Layer: Dev Hub</span></p>
+<div class="codewrap err"><div class="codebar"><span>error</span><button class="copy" type="button">Copy</button></div><pre class="code"><code>Error: You have reached the maximum number of active scratch orgs allowed for your Dev Hub.</code></pre></div>
+<details><summary>Solution</summary>
+<div class="codewrap"><div class="codebar"><span>bash</span><button class="copy" type="button">Copy</button></div><pre class="code"><code>sf org list --all                                    # find forgotten aliases
+sf org list limits --target-org devhub               # your actual allowance
+sf data query --target-org devhub --query &quot;SELECT SignupUsername, ExpirationDate, CreatedBy.Name \
+FROM ActiveScratchOrg ORDER BY CreatedDate&quot;          # who is holding the slots
+sf org delete scratch --target-org old1 --no-prompt</code></pre></div>
+<p><b>The subtle version:</b> orgs leaked by <b>failed CI jobs</b>. A job that dies between &ldquo;create org&rdquo;
+and &ldquo;delete org&rdquo; holds a slot for its full duration.</p>
+<p><b>Prevent:</b> every CI cleanup step runs with <code>if: always()</code>; short
+<code>--duration-days</code>; a scheduled sweep that deletes CI orgs older than a day. There are also
+<b>daily creation</b> limits distinct from <b>active</b> limits &mdash; hitting the daily one means waiting,
+not deleting.</p>
+</details>
+
+<h3 id="d8">Drill 8 &mdash; Source tracking conflict</h3>
+<p class="drillmeta"><span class="warm">Common</span><span>Cost: minutes, or a lost afternoon's work</span><span>Layer: deploy</span></p>
+<div class="codewrap err"><div class="codebar"><span>error</span><button class="copy" type="button">Copy</button></div><pre class="code"><code>Error: We found a conflict in the org and your local project:
+  Service_Request__c.Priority__c   (Changed in both)</code></pre></div>
+<div class="think"><b>Think first:</b> which copy is authoritative here &mdash; and how would you even know?</div>
+<details><summary>Solution</summary>
+<p><b>Root cause:</b> you changed a field in the org UI and the same file locally. The CLI refuses to pick
+a winner, which is correct behaviour.</p>
+<div class="codewrap"><div class="codebar"><span>bash</span><button class="copy" type="button">Copy</button></div><pre class="code"><code>sf project retrieve preview --target-org dev1   # what changed in the org
+sf project deploy preview  --target-org dev1    # what would go up, and what conflicts
+sf project retrieve start --metadata CustomField:Service_Request__c.Priority__c --target-org dev1
+git diff                                        # now SEE the org&#x27;s change before deciding</code></pre></div>
+<p><b>Fix:</b> retrieve, inspect the diff, then keep the right side deliberately.
+<code>--ignore-conflicts</code> silently discards one side &mdash; only use it when you already know which.</p>
+<p><b>Prevent:</b> pick one editing surface per component type. Objects/fields in the UI then retrieved;
+Apex/LWC in the editor then deployed. Mixing both on the same component is what creates conflicts.</p>
+</details>
+
+<div class="phase" id="c"><h2>C &middot; Metadata deployment</h2><span>The layer with the most helpful error messages, if you read them backwards</span></div>
+
+<h3 id="d9">Drill 9 &mdash; Missing cross-reference</h3>
+<p class="drillmeta"><span class="hot">Very common</span><span>Cost: minutes</span><span>Layer: deploy</span></p>
+<div class="codewrap err"><div class="codebar"><span>error</span><button class="copy" type="button">Copy</button></div><pre class="code"><code>Error: Ops_Core_User: In field: field - no CustomField named
+       Service_Request__c.Resolution_Notes__c found</code></pre></div>
+<details><summary>Solution</summary>
+<p><b>Root cause:</b> a permission set (the victim) references a field (the cause) that is not in this
+deployment or in the org &mdash; you added the permission entry but not the field file, or you deployed a
+subset with <code>--source-dir</code>.</p>
+<div class="codewrap"><div class="codebar"><span>bash</span><button class="copy" type="button">Copy</button></div><pre class="code"><code>ls packages/core/main/default/objects/Service_Request__c/fields/
+grep -rl &quot;Resolution_Notes__c&quot; packages/          # who references it
+sf project deploy start --target-org dev1         # deploy the WHOLE directory, not a subset</code></pre></div>
+<p><b>Prevent:</b> deploy whole package directories. Let CI deploy from a clean checkout into a fresh org &mdash;
+that is what catches &ldquo;it works on my machine because my org already has it&rdquo;.</p>
+</details>
+
+<h3 id="d10">Drill 10 &mdash; Deploy succeeds locally, fails from a clean checkout</h3>
+<p class="drillmeta"><span class="warm">Sneaky</span><span>Cost: hours</span><span>Layer: source</span></p>
+<div class="think"><b>Think first:</b> what does your working copy contain that Git does not?</div>
+<details><summary>Solution</summary>
+<p><b>Root cause:</b> an untracked or ignored file. A <code>-meta.xml</code> that was never added, a
+component excluded by <code>.forceignore</code>, or a file whose name differs in case (macOS is
+case-insensitive, Linux CI is not &mdash; <code>ServiceRequestservice.cls</code> vs
+<code>ServiceRequestService.cls</code> will bite you exactly once).</p>
+<div class="codewrap"><div class="codebar"><span>bash</span><button class="copy" type="button">Copy</button></div><pre class="code"><code>git status --ignored | head -40
+cat .forceignore
+git ls-files packages/core | wc -l ; find packages/core -type f | wc -l   # mismatch = untracked files
+git clone &lt;repo&gt; /tmp/clean &amp;&amp; cd /tmp/clean &amp;&amp; sf project deploy start --target-org fresh</code></pre></div>
+<p><b>Prevent:</b> the golden rule of 2GP &mdash; <b>if it is not in Git, it does not exist</b>. Deploy from a
+clean clone once a week, or let CI do it on every PR.</p>
+</details>
+
+<h3 id="d11">Drill 11 &mdash; Deployment order / circular reference</h3>
+<p class="drillmeta"><span class="cool">Occasional</span><span>Cost: minutes</span><span>Layer: deploy</span></p>
+<div class="codewrap err"><div class="codebar"><span>error</span><button class="copy" type="button">Copy</button></div><pre class="code"><code>Error: ServiceRequestService: Dependent class is invalid and needs recompilation:
+       ServiceRequestSelector: line 12, column 9: Invalid type: Service_Request__c</code></pre></div>
+<details><summary>Solution</summary>
+<p><b>Root cause:</b> you deployed Apex before the object it references. Salesforce deploys a single
+request as one transaction and resolves ordering <i>within</i> it &mdash; but not <i>across</i> separate
+deployments.</p>
+<p><b>Fix:</b> one deployment containing everything. <b>Prevent:</b> stop using
+<code>--source-dir classes/</code> as a speed hack; deploy the package directory. If a genuine circular
+reference exists between two Apex classes, that is fine (Apex allows it within one deploy) &mdash; but a
+circular reference between two <i>packages</i> is impossible by design (see
+<a href="11-dependencies.html">Part 11</a>).</p>
+</details>
+
+<h3 id="d12">Drill 12 &mdash; Namespace prefix confusion after deploying to the packaging org</h3>
+<p class="drillmeta"><span class="warm">1GP speciality</span><span>Cost: hours</span><span>Layer: deploy</span></p>
+<div class="codewrap err"><div class="codebar"><span>error</span><button class="copy" type="button">Copy</button></div><pre class="code"><code>Error: Invalid field Service_Request__c.Summary__c for SObject opskit__Service_Request__c</code></pre></div>
+<div class="think"><b>Think first:</b> your local files have no prefix. The org's components do. Who is
+supposed to add it, and where did that break down?</div>
+<details><summary>Solution</summary>
+<p><b>Root cause:</b> a mismatch between where the namespace is applied. The rules:</p>
+<div class="tablewrap"><table>
+<thead><tr><th>Situation</th><th>Local source</th><th>Who applies the prefix</th></tr></thead>
+<tbody>
+<tr><td>1GP: deploying into a namespaced packaging org</td><td>unprefixed, and <b>no</b> <code>namespace</code> key in <code>sfdx-project.json</code></td><td>The org, on deploy</td></tr>
+<tr><td>2GP: deploying into a namespaced scratch org</td><td>unprefixed, <b>with</b> a <code>namespace</code> key</td><td>The scratch org (created namespaced because of that key)</td></tr>
+<tr><td>Any org: consuming an <b>installed</b> package</td><td>you must write <code>opskit__</code> yourself</td><td>Nobody &mdash; it is someone else's namespace to you</td></tr>
+</tbody></table></div>
+<p><b>Fix:</b> match your project file to the model you are in (the course ships two projects &mdash;
+<code>sample-project/</code> with a namespace, <code>sample-project/1gp/</code> without &mdash; precisely for this
+reason).</p>
+<p><b>Prevent:</b> never hard-code a prefixed API name in your own package's code. Use static SOQL or
+<code>Schema</code> describes and let the platform resolve it.</p>
+</details>
+
+<div class="phase" id="d"><h2>D &middot; Package version build</h2><span>The build environment knows nothing about your org &mdash; that is the whole lesson</span></div>
+
+<h3 id="d13">Drill 13 &mdash; Namespace not linked</h3>
+<p class="drillmeta"><span class="hot">Blocks your first package</span><span>Cost: minutes</span><span>Layer: Dev Hub</span></p>
+<div class="codewrap err"><div class="codebar"><span>error</span><button class="copy" type="button">Copy</button></div><pre class="code"><code>$ sf package create --name &quot;Ops Toolkit Core&quot; --package-type Managed --path packages/core
+Error: The namespace &#x27;opskit&#x27; is not linked to this Dev Hub, or you don&#x27;t have permission to use it.</code></pre></div>
+<div class="think"><b>Think first:</b> three separate things have to agree. Name them.</div>
+<details><summary>Solution</summary>
+<p><b>The three:</b> (1) the namespace <b>registered</b> in the DE org, (2) the <b>Namespace Registry link</b>
+in the Dev Hub, (3) the <code>namespace</code> string in <code>sfdx-project.json</code> &mdash; which is
+case-sensitive and must match character for character.</p>
+<div class="codewrap"><div class="codebar"><span>bash</span><button class="copy" type="button">Copy</button></div><pre class="code"><code>grep -n namespace sfdx-project.json
+sf data query --target-org nsorg --query &quot;SELECT NamespacePrefix FROM Organization&quot;
+# Dev Hub UI: App Launcher → Namespace Registries → is it listed, and Active?</code></pre></div>
+<p><b>Prevent:</b> do the link once on day one, then prove it with a throwaway <code>sf package create</code>
+before you write any code.</p>
+</details>
+
+<h3 id="d14">Drill 14 &mdash; The test that only fails during the build</h3>
+<p class="drillmeta"><span class="hot">#1 cause of failed 2GP builds</span><span>Cost: hours</span><span>Layer: build</span></p>
+<div class="codewrap err"><div class="codebar"><span>error</span><button class="copy" type="button">Copy</button></div><pre class="code"><code>$ sf package version create --package &quot;Ops Toolkit Core&quot; --code-coverage --wait 30
+Error: Package version creation failed:
+  ServiceRequestServiceTest.createsRequestWithSlaDueDate: System.QueryException:
+  List has no rows for assignment to SObject</code></pre></div>
+<div class="think"><b>Think first:</b> the test is green in your scratch org. Name three things the build
+environment does not have.</div>
+<details><summary>Solution</summary>
+<p><b>Root cause:</b> the test depends on something that exists in <i>your org</i> but is not in the
+package. The build environment contains <b>only</b> your package directory plus declared dependencies:
+no seed data, no records you created by hand, no manual Setup changes, no other installed packages, no
+custom settings rows you typed in, and none of your colleagues' components.</p>
+<div class="codewrap"><div class="codebar"><span>bash</span><button class="copy" type="button">Copy</button></div><pre class="code"><code>sf package version create list --target-dev-hub devhub          # find the 08c
+sf package version create report --package-create-request-id 08c... --target-dev-hub devhub</code></pre></div>
+<p><b>Fix:</b> create every record the test needs inside the test (<code>@TestSetup</code>). If the data is
+genuinely part of the product (like the <code>Ops_Setting.Default</code> CMDT row), <b>package it</b>.</p>
+<p><b>Prevent:</b> never <code>SeeAllData=true</code>. Before packaging, run your tests in a brand-new
+scratch org with <b>no</b> seed data &mdash; that org is the closest thing you have to the build environment.</p>
+<div class="why"><p><b>Deeper knowledge.</b> This is the same failure as drill 10 and drill 28, wearing
+different clothes: <i>your environment has invisible state that your artefact does not carry</i>. Once you
+recognise the pattern, you will diagnose these in seconds for the rest of your career.</p></div>
+</details>
+
+<h3 id="d15">Drill 15 &mdash; Missing dependency at build time</h3>
+<p class="drillmeta"><span class="hot">Common with multi-package</span><span>Cost: minutes</span><span>Layer: build</span></p>
+<div class="codewrap err"><div class="codebar"><span>error</span><button class="copy" type="button">Copy</button></div><pre class="code"><code>$ sf package version create --package &quot;Ops Toolkit Field Ops&quot; --wait 40
+Error: Invalid type: ServiceRequestService
+       ServiceRequestConsoleController: line 12, column 9</code></pre></div>
+<details><summary>Solution</summary>
+<p><b>Root cause:</b> Field Ops references Core's Apex, but no dependency is declared, so Core was never
+installed into the build environment. It compiles on your laptop only because your dev org contains both.</p>
+<div class="codewrap"><div class="codebar"><span>json</span><button class="copy" type="button">Copy</button></div><pre class="code"><code>&quot;dependencies&quot;: [ { &quot;package&quot;: &quot;Ops Toolkit Core&quot;, &quot;versionNumber&quot;: &quot;1.0.0.LATEST&quot; } ]</code></pre></div>
+<p>And a version of Core must actually exist for <code>LATEST</code> to resolve to.</p>
+<p><b>Prevent:</b> when a class in package B first references a symbol from package A, add the dependency
+declaration <b>in the same commit</b> &mdash; it is part of the change, not follow-up work.</p>
+</details>
+
+<h3 id="d16">Drill 16 &mdash; Cannot promote: coverage</h3>
+<p class="drillmeta"><span class="hot">Painful because it is unfixable in place</span><span>Cost: a rebuild</span><span>Layer: build</span></p>
+<div class="codewrap err"><div class="codebar"><span>error</span><button class="copy" type="button">Copy</button></div><pre class="code"><code>$ sf package version promote --package &quot;Ops Toolkit Core@1.0.0-1&quot;
+Error: Can&#x27;t promote this package version because the code coverage is below 75%,
+or code coverage was not calculated when the version was created.</code></pre></div>
+<details><summary>Solution</summary>
+<p><b>Root cause:</b> coverage is a property <b>of the version</b>, computed once, at create time, and only
+when you pass <code>--code-coverage</code>. There is no way to add it afterwards.</p>
+<div class="codewrap"><div class="codebar"><span>bash</span><button class="copy" type="button">Copy</button></div><pre class="code"><code>sf package version list --verbose --target-dev-hub devhub    # see the Code Coverage column
+sf apex run test --target-org dev1 --code-coverage --result-format human   # find the weak classes first
+sf package version create --package &quot;Ops Toolkit Core&quot; --code-coverage --wait 30</code></pre></div>
+<p><b>Also worth knowing:</b> a class with <b>0%</b> coverage can block you even when the overall number
+looks fine &mdash; check per-class coverage, not just the aggregate.</p>
+<p><b>Prevent:</b> put <code>--code-coverage</code> in every version-create command everywhere, forever. It
+costs build minutes and saves rebuild hours.</p>
+</details>
+
+<h3 id="d17">Drill 17 &mdash; Ancestry error</h3>
+<p class="drillmeta"><span class="warm">Appears the moment you have customers</span><span>Cost: hours</span><span>Layer: build</span></p>
+<div class="codewrap err"><div class="codebar"><span>error</span><button class="copy" type="button">Copy</button></div><pre class="code"><code>Error: The ancestor version [1.0.0.1] is not valid, or you removed or changed a
+       component that is part of a released version.</code></pre></div>
+<div class="think"><b>Think first:</b> this error has two completely different causes wearing one message.
+What are they?</div>
+<details><summary>Solution</summary>
+<p><b>Cause A &mdash; the ancestor itself is wrong:</b> the version you named is not released, does not exist,
+or belongs to another package. Check with
+<code>sf package version list --released</code> and <code>sf package version displayancestry --package X --verbose</code>.</p>
+<p><b>Cause B &mdash; you broke backward compatibility</b> (the useful case). You deleted or changed something
+that a released version promised to keep: a <code>global</code> method's signature, a <code>global</code> class,
+a released object or field. The platform is refusing to let you break subscribers.</p>
+<div class="codewrap"><div class="codebar"><span>bash</span><button class="copy" type="button">Copy</button></div><pre class="code"><code>git diff core-v1.0.0..HEAD -- packages/core/main/default/classes | grep -E &#x27;^-.*global&#x27;</code></pre></div>
+<p>That one-liner usually finds it: any removed <code>global</code> line is a suspect.</p>
+<p><b>Fix:</b> put the removed member back and mark it <code>@Deprecated</code> instead. <b>Prevent:</b> treat
+every <code>global</code> as a permanent API. Review any diff that touches one as an API change, not a
+refactor.</p>
+</details>
+
+<h3 id="d18">Drill 18 &mdash; The build that never returns</h3>
+<p class="drillmeta"><span class="warm">Frustrating rather than hard</span><span>Cost: patience</span><span>Layer: build</span></p>
+<div class="codewrap err"><div class="codebar"><span>error</span><button class="copy" type="button">Copy</button></div><pre class="code"><code>$ sf package version create --package &quot;Ops Toolkit Core&quot; --wait 30
+Error: Version create timed out.  Run &quot;sf package version create report -i 08cXXXXXXXXXXXXXXX&quot; to check status.</code></pre></div>
+<details><summary>Solution</summary>
+<p><b>Not a failure.</b> <code>--wait</code> is a client-side poll timeout; the build continues in Salesforce
+regardless. Re-run the report until the request reaches Success or Error.</p>
+<div class="codewrap"><div class="codebar"><span>bash</span><button class="copy" type="button">Copy</button></div><pre class="code"><code>sf package version create report --package-create-request-id 08c... --target-dev-hub devhub</code></pre></div>
+<p><b>Why builds are slow:</b> the environment must be provisioned, dependencies installed, metadata
+deployed, Apex compiled and tests run. More dependencies and slower tests mean longer builds &mdash;
+5&ndash;20 minutes is normal; 40+ happens.</p>
+<p><b>Prevent:</b> generous <code>--wait</code> in CI (40&ndash;60), and never kill the job assuming the
+build died. Killing the client does not cancel the build; you will just have an orphan you must look up
+by its <code>08c</code>.</p>
+</details>
+
+<div class="phase" id="e"><h2>E &middot; Installation</h2><span>Where your assumptions meet someone else's org</span></div>
+
+<h3 id="d19">Drill 19 &mdash; Missing dependency at install</h3>
+<p class="drillmeta"><span class="hot">Every multi-package product</span><span>Cost: minutes</span><span>Layer: install</span></p>
+<div class="codewrap err"><div class="codebar"><span>error</span><button class="copy" type="button">Copy</button></div><pre class="code"><code>Error: Please install the following required package versions before proceeding:
+  Ops Toolkit Core (04tXXXXXXXXXXXXXXX)</code></pre></div>
+<details><summary>Solution</summary>
+<p><b>This is correct behaviour, not a bug.</b> Salesforce never auto-installs dependencies &mdash; installing
+software into someone's org without them asking is not something the platform will do on your behalf.</p>
+<p><b>Fix:</b> install the named <code>04t</code> first, then retry. <b>Prevent:</b> publish the install order
+in the listing and the README, script it, and in CI install in a loop in dependency order. Customers do
+not read wikis; they read the error message and then your listing.</p>
+</details>
+
+<h3 id="d20">Drill 20 &mdash; &ldquo;Package version not available&rdquo;</h3>
+<p class="drillmeta"><span class="warm">Four causes, one message</span><span>Cost: minutes</span><span>Layer: install</span></p>
+<div class="codewrap err"><div class="codebar"><span>error</span><button class="copy" type="button">Copy</button></div><pre class="code"><code>Error: The package version is not available, or you don&#x27;t have permission to install it.</code></pre></div>
+<details><summary>Solution</summary>
+<p>Check in this order &mdash; cheapest first:</p>
+<ol>
+<li><b>Beta into production.</b> Not allowed, ever. Promote it, or install into a scratch/sandbox/DE org.</li>
+<li><b>Just created.</b> The version needs a moment to become installable &rarr; add
+<code>--publish-wait 20</code>.</li>
+<li><b>Installation key</b> missing or wrong.</li>
+<li><b>Wrong ID</b> &mdash; an <code>05i</code> or <code>0Ho</code> pasted where a <code>04t</code> belongs, or an ID from
+a different Dev Hub.</li>
+</ol>
+<div class="codewrap"><div class="codebar"><span>bash</span><button class="copy" type="button">Copy</button></div><pre class="code"><code>sf package version list --verbose --target-dev-hub devhub | grep 04t...   # Released column?</code></pre></div>
+</details>
+
+<h3 id="d21">Drill 21 &mdash; Install fails on edition or features</h3>
+<p class="drillmeta"><span class="cool">Rare until it isn't</span><span>Cost: hours</span><span>Layer: install</span></p>
+<div class="codewrap err"><div class="codebar"><span>error</span><button class="copy" type="button">Copy</button></div><pre class="code"><code>Error: This package can&#x27;t be installed because your org doesn&#x27;t have the required feature or edition
+       (e.g. Person Accounts, Multi-Currency, Experience Cloud).</code></pre></div>
+<details><summary>Solution</summary>
+<p><b>Root cause:</b> your package contains metadata that only exists when a feature is enabled, so it
+implicitly requires it. You never noticed because your scratch org definition enabled it.</p>
+<p><b>Fix:</b> either declare the requirement honestly in the listing's <i>supported editions</i>, or make
+the feature optional (split it into a separate package, or make the dependency dynamic).</p>
+<p><b>Prevent:</b> install-test in a scratch org whose definition has <b>no</b> extra features, at the
+<b>lowest edition</b> you claim to support. Most ISVs test only on Developer edition and discover this in a
+customer's Professional edition org.</p>
+</details>
+
+<h3 id="d22">Drill 22 &mdash; Install fails on the subscriber's own metadata</h3>
+<p class="drillmeta"><span class="warm">The one you cannot reproduce</span><span>Cost: days</span><span>Layer: install</span></p>
+<div class="codewrap err"><div class="codebar"><span>error</span><button class="copy" type="button">Copy</button></div><pre class="code"><code>Error: Installation failed. Apex compile error in subscriber org:
+       Invalid field Territory__c for SObject Account</code></pre></div>
+<div class="think"><b>Think first:</b> your Apex compiled perfectly in the build environment. Why would it
+fail in their org?</div>
+<details><summary>Solution</summary>
+<p><b>Root cause:</b> packaged Apex is <b>compiled in the subscriber org</b>, and <i>their</i> metadata is part
+of the compilation context. Your code referenced a field that exists in your dev org (you or a colleague
+created it manually, or it came from another package) but not in theirs.</p>
+<div class="codewrap"><div class="codebar"><span>bash</span><button class="copy" type="button">Copy</button></div><pre class="code"><code>grep -rn &quot;Territory__c&quot; packages/                      # find the reference
+# then ask: is that field IN my package? if not, why does my code assume it?</code></pre></div>
+<p><b>Fix:</b> package the field, or make the reference dynamic and defensive
+(<code>Schema.getGlobalDescribe()</code> / <code>SObjectType.Account.fields.getMap().containsKey(...)</code>)
+with graceful degradation.</p>
+<p><b>Prevent:</b> a clean-org install test catches this every single time. It is also why standard-object
+customisations are risky to assume &mdash; you do not own <code>Account</code>.</p>
+</details>
+
+<div class="phase" id="f"><h2>F &middot; Upgrades</h2><span>Failures here happen in production, in someone else's org</span></div>
+
+<h3 id="d23">Drill 23 &mdash; Upgrade fails on existing data</h3>
+<p class="drillmeta"><span class="hot">The 2am escalation</span><span>Cost: days + reputation</span><span>Layer: upgrade</span></p>
+<div class="codewrap err"><div class="codebar"><span>error</span><button class="copy" type="button">Copy</button></div><pre class="code"><code>Error: Package upgrade failed.
+       Required field is missing: Priority__c on 143 records.</code></pre></div>
+<details><summary>Solution</summary>
+<p><b>Root cause:</b> you made an existing field <code>required</code> (or added a validation rule) and the
+customer's existing data violates it. The upgrade rolls back &mdash; which is the good news; the bad news is
+they are now stuck on the old version.</p>
+<p><b>The correct pattern &mdash; a three-version migration:</b></p>
+<ol class="steps">
+<li><b>1.1</b> ships the field as <i>not</i> required, plus a post-install script or admin report that
+populates it.</li>
+<li>Customers upgrade and their data becomes clean.</li>
+<li><b>1.3</b> makes it required, once the data can satisfy it.</li>
+</ol>
+<p><b>Prevent:</b> the upgrade rehearsal in <a href="12-install.html">Part 12</a> &mdash; install the previous
+released version, seed <b>deliberately messy</b> data (blanks, old picklist values, orphans), then upgrade.
+Every constraint you tighten is a question about data you cannot see.</p>
+</details>
+
+<h3 id="d24">Drill 24 &mdash; The upgrade &ldquo;worked&rdquo; but the customer sees nothing new</h3>
+<p class="drillmeta"><span class="warm">Common support ticket</span><span>Cost: hours</span><span>Layer: upgrade</span></p>
+<div class="think"><b>Think first:</b> which component types does a subscriber's customisation
+permanently win over yours?</div>
+<details><summary>Solution</summary>
+<p><b>Root cause, usually one of three:</b></p>
+<ul>
+<li><b>Layouts.</b> Once a subscriber customises a packaged page layout, your later layout changes
+typically do not reach them &mdash; new fields must be added by their admin. Subscriber customisation wins by
+design.</li>
+<li><b>Permission sets.</b> New components need new permissions; if the admin uses their own cloned
+permission set instead of yours, your grants never reach their users.</li>
+<li><b>Custom Metadata rows.</b> If they edited the row, upgrade behaviour depends on protected/managed
+state <span class="badge b-unk">Verify</span> &mdash; test it explicitly rather than assuming.</li>
+</ul>
+<p><b>Fix / prevent:</b> ship release notes that state the manual steps in plain language (&ldquo;add
+<i>Resolution Notes</i> to your Service Request layout&rdquo;), and consider a post-install task or an in-app
+setup page that lists them. Never assume metadata delivery equals user-visible change.</p>
+</details>
+
+<h3 id="d25">Drill 25 &mdash; The post-install script blew up</h3>
+<p class="drillmeta"><span class="warm">Hard to debug remotely</span><span>Cost: days</span><span>Layer: upgrade</span></p>
+<div class="codewrap err"><div class="codebar"><span>error</span><button class="copy" type="button">Copy</button></div><pre class="code"><code>Error: The post install script failed. System.LimitException: Apex CPU time limit exceeded</code></pre></div>
+<details><summary>Solution</summary>
+<p><b>Root cause:</b> your <code>InstallHandler</code> did real work synchronously against a customer's data
+volume. You tested against 20 records; they have 400,000.</p>
+<p><b>Rules for post-install scripts:</b></p>
+<ul>
+<li><b>Idempotent.</b> It may run again; it must not double-create anything.</li>
+<li><b>Version-aware.</b> Handle <code>previousVersion() == null</code> (fresh install) <i>and</i> upgrades
+that skip versions (1.0 &rarr; 2.0 directly).</li>
+<li><b>Asynchronous for anything data-shaped.</b> Enqueue a Batch/Queueable and let it run outside the
+install transaction.</li>
+<li><b>Fail soft.</b> A caught, logged failure that leaves the app usable beats a failed install.</li>
+<li>It runs as a special system user whose context differs from an admin's &mdash;
+<span class="badge b-unk">Verify</span> the current documented limitations before relying on anything
+exotic there.</li>
+</ul>
+<p><b>Prevent:</b> test the script against a large data set, and test the skip-version upgrade path
+(1.0 &rarr; 2.0), which nobody remembers to test and every customer eventually performs.</p>
+</details>
+
+<div class="phase" id="g"><h2>G &middot; Runtime in a customer org</h2><span>&ldquo;It works for me&rdquo; is not a diagnosis</span></div>
+
+<h3 id="d26">Drill 26 &mdash; Users see nothing / insufficient privileges</h3>
+<p class="drillmeta"><span class="hot">The most common real defect</span><span>Cost: hours</span><span>Layer: runtime</span></p>
+<div class="think"><b>Think first:</b> you tested it. What was different about <i>you</i>?</div>
+<details><summary>Solution</summary>
+<p><b>Root cause, ranked:</b></p>
+<ol>
+<li><b>You tested as a System Administrator</b>, who has access to everything regardless of your
+permission set. Your permission set could be empty and it would still &ldquo;work&rdquo;.</li>
+<li>A component is in your dev org but <b>not in the package</b>.</li>
+<li>The permission set is missing <code>classAccesses</code> (LWC dies silently),
+<code>tabSettings</code>, <code>applicationVisibilities</code>, or field permissions.</li>
+<li>Record-level access: your object's OWD is Private and nobody owns the records.</li>
+</ol>
+<div class="codewrap"><div class="codebar"><span>bash</span><button class="copy" type="button">Copy</button></div><pre class="code"><code>sf org create user --target-org customer1 --set-alias plainuser \
+  --definition-file config/plain-user-def.json      # a Standard User, no admin
+sf org assign permset --name opskit__Ops_Core_User --target-org customer1 --on-behalf-of plainuser</code></pre></div>
+<p>Then log in <b>as that user</b> and use the app. <b>Make this a release gate</b> &mdash; it catches the
+majority of genuine install defects, and it takes four minutes.</p>
+<div class="why"><p><b>Deeper knowledge.</b> There is a checklist question worth internalising: for every
+component you add to a package, ask <i>&ldquo;which permission set grants access to this?&rdquo;</i> Objects, fields,
+Apex classes, tabs, apps, record types and page access all need explicit grants. &ldquo;The admin will do it&rdquo;
+is not an answer &mdash; the admin does not know what your app needs.</p></div>
+</details>
+
+<h3 id="d27">Drill 27 &mdash; Works in your org, broken in theirs: namespace</h3>
+<p class="drillmeta"><span class="warm">Subtle</span><span>Cost: hours</span><span>Layer: runtime</span></p>
+<div class="codewrap err"><div class="codebar"><span>error</span><button class="copy" type="button">Copy</button></div><pre class="code"><code>System.QueryException: sObject type &#x27;Service_Request__c&#x27; is not supported.</code></pre></div>
+<details><summary>Solution</summary>
+<p><b>Root cause:</b> a hard-coded API name evaluated in a context that does not resolve to your
+namespace &mdash; typically dynamic SOQL built from a string, a field name in JavaScript, a REST call from
+outside, or a Flow formula.</p>
+<div class="tablewrap"><table>
+<thead><tr><th>Where the name appears</th><th>Resolves to your namespace?</th></tr></thead>
+<tbody>
+<tr><td>Static SOQL in your packaged Apex</td><td>Yes &mdash; the compiler binds it</td></tr>
+<tr><td>Dynamic SOQL inside your packaged Apex</td><td>Usually yes, via namespace context <span class="badge b-inf">Inference</span> &mdash; <b>test it</b></td></tr>
+<tr><td>A name sent in from LWC/JS, a REST body, or the subscriber's own Apex</td><td><b>No</b> &mdash; it needs <code>opskit__</code></td></tr>
+<tr><td><code>Schema.SObjectType.Service_Request__c</code></td><td>Yes, and it survives everything &mdash; prefer this</td></tr>
+</tbody></table></div>
+<p><b>Fix:</b> derive names rather than typing them:
+<code>Service_Request__c.SObjectType.getDescribe().getName()</code> returns the fully-qualified name at
+runtime, correct in every org.</p>
+<p><b>Prevent:</b> grep your codebase for quoted API names during review. Each one is a question:
+&ldquo;where will this string be evaluated?&rdquo;</p>
+</details>
+
+<h3 id="d28">Drill 28 &mdash; Governor limits that only fire in production</h3>
+<p class="drillmeta"><span class="hot">Classic ISV pain</span><span>Cost: days</span><span>Layer: runtime</span></p>
+<div class="codewrap err"><div class="codebar"><span>error</span><button class="copy" type="button">Copy</button></div><pre class="code"><code>System.LimitException: Too many SOQL queries: 101
+System.LimitException: Apex CPU time limit exceeded
+System.DmlException: UNABLE_TO_LOCK_ROW, unable to obtain exclusive access to this record</code></pre></div>
+<details><summary>Solution</summary>
+<p><b>Why it only happens there:</b> your code is not alone. In a subscriber org your trigger runs
+alongside their triggers, their flows, their validation rules, their other vendors' packages, and their
+data volume. A query inside a loop that is invisible at 10 records is fatal at 10,000.</p>
+<div class="tablewrap"><table>
+<thead><tr><th>Symptom</th><th>Usual cause</th><th>Fix</th></tr></thead>
+<tbody>
+<tr><td>Too many SOQL queries: 101</td><td>Query inside a loop, or a trigger that re-enters</td><td>Bulkify; query once into a Map; add a recursion guard</td></tr>
+<tr><td>Apex CPU time limit</td><td>Nested loops over large collections; heavy work in a trigger</td><td>Move to async; reduce algorithmic complexity; process in batches</td></tr>
+<tr><td>Too many DML rows</td><td>Unbatched updates</td><td>Collect and DML once; Batch Apex over 10k+</td></tr>
+<tr><td>UNABLE_TO_LOCK_ROW</td><td>Two processes updating the same parent (yours + theirs)</td><td>Reduce lock scope, retry with backoff, avoid updating shared parents in triggers</td></tr>
+<tr><td>You have uncommitted work pending</td><td>Callout after DML in the same transaction</td><td>Callout first, or go async (<code>@future(callout=true)</code> / Queueable)</td></tr>
+<tr><td>Heap size limit</td><td>Loading too many records into memory</td><td><code>for (X x : [SELECT ...])</code> query-loop form; SOQL <code>LIMIT</code>; streaming</td></tr>
+</tbody></table></div>
+<p><b>Prevent:</b> test with 10,000 records, not 10. Seed a scratch org with realistic volume before you
+release anything that touches a trigger. <span class="badge b-inf">Inference</span> Packaged code gets some
+governor allocation separate from subscriber code in certain contexts &mdash; treat that as a bonus, never as
+a design assumption.</p>
+</details>
+
+<div class="phase" id="h"><h2>H &middot; CI and process</h2><span>Failures that are not about code at all</span></div>
+
+<h3 id="d29">Drill 29 &mdash; Git / source drift (the 1GP special)</h3>
+<p class="drillmeta"><span class="warm">Silent for months</span><span>Cost: weeks</span><span>Layer: process</span></p>
+<p><b>Symptom:</b> your released 1GP version contains a field that exists nowhere in Git &mdash; or a change
+you merged three months ago never reached a customer.</p>
+<details><summary>Solution</summary>
+<p><b>Root cause:</b> in 1GP the packaging org is the source of truth, so any UI change made directly in
+that org is invisible to Git. Drift accumulates quietly and surfaces during an audit, a migration, or a
+&ldquo;why does production have this?&rdquo; conversation.</p>
+<div class="codewrap"><div class="codebar"><span>bash</span><button class="copy" type="button">Copy</button></div><pre class="code"><code>sf project retrieve start --manifest package.xml --target-org pkgorg
+git status                    # every line here is drift
+git diff --stat</code></pre></div>
+<p><b>Fix:</b> reconcile deliberately, commit the truth, and agree that all future changes are deployed
+from Git.</p>
+<p><b>Prevent:</b> restrict who can log into the packaging org; run a scheduled retrieve-and-diff that
+fails loudly; or move to 2GP, where this entire category of bug cannot exist because there is no org to
+drift from.</p>
+</details>
+
+<h3 id="d30">Drill 30 &mdash; A secret leaked, or CI can suddenly publish</h3>
+<p class="drillmeta"><span class="hot">Security incident</span><span>Cost: whatever it costs</span><span>Layer: process</span></p>
+<p><b>Symptom:</b> <code>server.key</code>, an SFDX auth URL, or an access token appears in a commit, a log,
+or a screenshot.</p>
+<details><summary>What to do, in order</summary>
+<ol class="steps">
+<li><b>Assume it is compromised the moment it is exposed.</b> Rotating later is not equivalent to
+rotating now; public repos are scraped within minutes.</li>
+<li><b>Revoke:</b> in the org, Setup &rarr; Connected Apps OAuth Usage &rarr; revoke; delete/regenerate the
+Connected App certificate; <code>sf org logout</code> everywhere it was used.</li>
+<li><b>Rotate:</b> new key pair, new secret in the CI store, new install keys if those leaked.</li>
+<li><b>Purge:</b> removing a file in a later commit does not remove it from history &mdash; rewrite history or
+treat the credential as permanently burned (usually the latter is faster and safer).</li>
+<li><b>Review what it could do:</b> a Dev Hub credential can create package versions <i>as you</i>. That is
+a supply-chain risk to every customer, not an inconvenience.</li>
+</ol>
+<p><b>Prevent:</b> <code>.gitignore</code> covering <code>.sf/</code>, <code>.sfdx/</code>, <code>*.key</code>;
+secret scanning enabled on the repo; workflows that write the key to a file and delete it in the same
+step; environment protection rules so only the release workflow can read release secrets; and never
+<code>echo</code> a secret, even &ldquo;temporarily&rdquo;.</p>
+</details>
+
+<hr>
+<h2>The method, generalised</h2>
+<ol class="steps">
+<li><b>Which org?</b> Say it out loud and verify with <code>sf org list --all</code>. This alone resolves a
+large share of &ldquo;impossible&rdquo; errors.</li>
+<li><b>Which layer?</b> Source, deploy, build, install, upgrade, runtime. Same symptom, six different
+causes.</li>
+<li><b>Read the authoritative record, not the CLI summary.</b> <code>ScratchOrgInfo</code>,
+<code>Package2VersionCreateRequest</code>, the deploy result, the install request. The CLI truncates;
+the record does not.</li>
+<li><b>What does the failing environment lack that mine has?</b> This single question solves drills
+10, 14, 22 and 26.</li>
+<li><b>Reproduce in a fresh org.</b> Reproducible &rarr; it is in your source. Not reproducible &rarr; the org is
+the variable, and now you know which one.</li>
+<li><b>Write the prevention down</b> &mdash; a test, a CI step, or a line in the release checklist. A bug you
+fixed twice was never really diagnosed.</li>
+</ol>
+<p>Need a symptom-to-cause lookup rather than a narrative? &rarr; <a href="17b-error-index.html">The Error
+Field Guide</a>.</p>
+
+  <nav class="pager"><a class="prev" href="16-day-plan.html"><span>Previous</span>16 &middot; Day-by-day plan</a><a class="next" href="17b-error-index.html"><span>Next</span>17b &middot; Error index</a></nav>
+  <footer class="sitefoot">
+    <p>Built as a personal learning course. Salesforce behaviour changes between releases &mdash;
+    always confirm against <a href="https://developer.salesforce.com/docs/atlas.en-us.sfdx_dev.meta/sfdx_dev/">Salesforce DX Developer Guide</a>
+    and the <a href="https://developer.salesforce.com/docs/atlas.en-us.packagingGuide.meta/packagingGuide/">ISVforce / Packaging guides</a>
+    before you rely on a detail in production.</p>
+  </footer>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

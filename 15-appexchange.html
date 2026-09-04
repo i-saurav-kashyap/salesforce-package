@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Listing and Distribution &middot; AppExchange From Zero</title>
+<link rel="stylesheet" href="assets/site.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<button class="navtoggle" aria-label="Toggle navigation">&#9776; Contents</button>
+<div class="shell">
+<nav class="sidenav" id="sidenav">
+  <div class="brand">
+    <span class="brand-mark">SF</span>
+    <span class="brand-text">AppExchange<br><b>From Zero</b></span>
+  </div>
+  <ol class="navlist">
+    <li><a href="index.html">Start here</a></li>
+    <li><a href="01-big-picture.html">1 &middot; Big picture</a></li>
+    <li><a href="02-orgs.html">2 &middot; Org architecture</a></li>
+    <li><a href="03-prereqs.html">3 &middot; Prerequisites</a></li>
+    <li><a href="04-the-app.html">4 &middot; The app</a></li>
+    <li><a href="05-1gp.html">5 &middot; 1GP concepts</a></li>
+    <li><a href="06-1gp-lifecycle.html">6 &middot; 1GP lifecycle</a></li>
+    <li><a href="07-2gp.html">7 &middot; 2GP concepts</a></li>
+    <li><a href="08-2gp-build.html">8 &middot; 2GP build</a></li>
+    <li><a href="09-scratch-orgs.html">9 &middot; Scratch orgs</a></li>
+    <li><a href="10-compare.html">10 &middot; 1GP vs 2GP</a></li>
+    <li><a href="11-dependencies.html">11 &middot; Dependencies</a></li>
+    <li><a href="12-install.html">12 &middot; Install &amp; upgrade</a></li>
+    <li><a href="13-security.html">13 &middot; Security Review</a></li>
+    <li><a href="14-cicd.html">14 &middot; CI/CD</a></li>
+    <li class="here"><a href="15-appexchange.html">15 &middot; AppExchange</a></li>
+    <li><a href="16-day-plan.html">16 &middot; Day-by-day plan</a></li>
+    <li><a href="17-debugging.html">17 &middot; Debug drills</a></li>
+    <li><a href="17b-error-index.html">17b &middot; Error index</a></li>
+    <li><a href="18-backend.html">18 &middot; Behind the scenes</a></li>
+    <li><a href="19-commands.html">19 &middot; Command cheat sheet</a></li>
+    <li><a href="20-quiz.html">20 &middot; Knowledge test</a></li>
+  </ol>
+  <div class="navfoot">
+    <p>Local course site.<br>Regenerate with <code>python3 build.py</code></p>
+  </div>
+</nav>
+<main id="main">
+  <header class="pagehead">
+    <p class="kicker">Part 15</p>
+    <h1>Listing and Distribution</h1>
+  </header>
+  <p class="lead">Your package works. That is roughly half of shipping a product. This page covers the
+commercial half &mdash; and, more importantly, teaches you to keep four things apart in your head that
+beginners constantly merge into one.</p>
+
+<h2>The four things that are not the same thing</h2>
+<div class="tablewrap">
+<table>
+<thead><tr><th></th><th>What it is</th><th>Where it happens</th><th>Can exist without the others?</th></tr></thead>
+<tbody>
+<tr><td><b>Package creation</b></td><td>Turning source into a versioned artifact (<code>04t</code>)</td><td>Dev Hub / packaging org</td><td>Yes &mdash; you can build versions forever and never distribute</td></tr>
+<tr><td><b>Package distribution</b></td><td>Getting the <code>04t</code> into someone's org</td><td>An install URL or <code>sf package install</code></td><td>Yes &mdash; private distribution needs no listing and no Security Review <span class="badge b-unk">Verify</span> the current rules for private/OEM distribution</td></tr>
+<tr><td><b>AppExchange listing</b></td><td>The marketing page shoppers see</td><td>Partner Console (Publishing)</td><td>No &mdash; a public listing requires a released version that passed Security Review</td></tr>
+<tr><td><b>Customer installation</b></td><td>The subscriber clicking Install</td><td>Their org</td><td>Yes &mdash; from a URL, with or without a listing</td></tr>
+</tbody>
+</table>
+</div>
+<div class="why"><p><b>Say it back:</b> &ldquo;I can build and install a managed package today with zero
+Salesforce involvement. Security Review and a listing are needed only to sell it publicly on
+AppExchange.&rdquo;</p></div>
+
+<h2>The path</h2>
+<pre class="diagram"> Product idea
+     ↓
+ Managed package (2GP)  ──── versions ────►  released 04t
+     ↓
+ Partner Business Org
+     ├─ License Management App (LMA)  ← connect the package so installs create licence records
+     └─ Publishing Console
+            ├─ Provider profile      (company info, logo, support contacts)
+            ├─ Solution              (the technical thing: a package version, or an API/bolt-on)
+            ├─ Listing               (the marketing thing: title, description, media, pricing)
+            └─ Security Review submission  ──► pass ──► listing can go live
+     ↓
+ AppExchange
+     ↓
+ Customer discovers → Get It Now → installs into their org → LMA records the licence</pre>
+
+<h2>Step by step</h2>
+
+<h3>1. Connect the package to your Partner org</h3>
+<p>In the Partner Community/Publishing Console you associate your <b>namespace and package</b> with your
+partner account, and connect it to the <b>License Management App</b> so that installs are recorded and
+you can manage licences (seats, expiry, suspend/reactivate).
+<span class="badge b-unk">Verify</span> the current LMA request and connection steps &mdash; this flow has
+changed several times and is documented in the ISVforce Guide.</p>
+<p><b>What the LMA gives you:</b> a <code>License</code> record per install, the subscriber's org ID and
+edition, the version they are on, and <b>Subscriber Support</b> login access when they grant it. Without
+it, you genuinely do not know who is running your software.</p>
+
+<h3>2. Create the Solution</h3>
+<p>A <b>Solution</b> is the technical artefact you are publishing. For a managed package, you choose the
+package and the <b>released</b> version. This is where your <code>04t</code> meets the commercial system.</p>
+
+<h3>3. Create the Listing</h3>
+<div class="tablewrap">
+<table>
+<thead><tr><th>Section</th><th>What is required</th><th>What good looks like</th></tr></thead>
+<tbody>
+<tr><td>Basics</td><td>Title, tagline, categories, industries, supported editions/languages</td><td>Editions must match what you actually tested &mdash; not aspiration</td></tr>
+<tr><td>Description</td><td>Short and full description, key features, benefits</td><td>Written for an admin evaluating a purchase, not for a developer</td></tr>
+<tr><td>Media</td><td>Logo, screenshots, usually a demo video</td><td>Screenshots from a clean org with realistic data &mdash; this is what your UAT/demo org is for</td></tr>
+<tr><td>Pricing</td><td>Free / paid, per-user or flat, trial availability</td><td>Be explicit about what the free tier includes</td></tr>
+<tr><td>Documentation</td><td>Install guide, admin guide, release notes, support policy</td><td><b>Install order for dependencies belongs here</b>, prominently</td></tr>
+<tr><td>Support</td><td>Contact channel, SLA, escalation</td><td>A real monitored address</td></tr>
+<tr><td>Trials</td><td>Test drive and/or Trialforce free trial</td><td>Optional, but a big conversion factor</td></tr>
+</tbody>
+</table>
+</div>
+
+<h3>4. Submit for Security Review</h3>
+<p>Done from the Publishing Console against a specific released version, with your architecture
+documentation and a review org. See <a href="13-security.html">Part 13</a>. Expect a findings report and
+at least one round trip. <span class="badge b-unk">Verify</span> current fees, required artefacts and
+turnaround times.</p>
+
+<h3>5. After approval</h3>
+<ul>
+<li>Your listing can be made <b>public</b>; it appears in AppExchange search and category browsing.</li>
+<li>The listing's install button points at your released version's install URL.</li>
+<li>You can now be found by customers, and by partners looking for integrations.</li>
+</ul>
+
+<h3>6. Managing versions after listing</h3>
+<div class="tablewrap">
+<table>
+<thead><tr><th>Change</th><th>What you do</th><th>Security Review again?</th></tr></thead>
+<tbody>
+<tr><td>New version, no new external services or major architecture change</td><td>Promote the version, update the Solution/listing to point at it</td><td>Usually re-review is required periodically or when the risk profile changes <span class="badge b-unk">Verify</span> the current policy &mdash; do not guess in front of a customer</td></tr>
+<tr><td>New external service, new callout, new auth model</td><td>Same, plus updated documentation</td><td>Expect yes</td></tr>
+<tr><td>Marketing copy change</td><td>Edit the listing</td><td>No</td></tr>
+<tr><td>Critical bug fix for existing customers</td><td>Patch version; consider a <b>push upgrade</b></td><td>Depends on the change</td></tr>
+</tbody>
+</table>
+</div>
+<div class="warn"><p><b>The listing does not upgrade your customers.</b> Pointing the listing at 2.0 only
+changes what <i>new</i> installs get. Existing subscribers upgrade when they choose to (or when you push).
+Communicating upgrades is your job, not AppExchange's.</p></div>
+
+<h2>How customers discover and install</h2>
+<pre class="diagram"> AppExchange search / category / partner referral / your website
+        ↓
+ Listing page  ──► &quot;Get It Now&quot;  ──► log in to their org (prod or sandbox)
+        ↓
+ Install screen:  Admins Only | All Users | Specific Profiles
+        ↓
+ Dependency check  → missing? install order from YOUR documentation
+        ↓
+ Install → post-install script → admin assigns permission sets → users use it
+        ↓
+ LMA in your PBO records the licence</pre>
+<p><b>The moment that decides whether they keep it</b> is the fifteen minutes after install. If an admin
+installs your package and cannot see anything because they have not assigned a permission set, many will
+give up. Ship a <b>Getting Started</b> page, a clear README in the listing, and consider a post-install
+task that points them at the setup steps.</p>
+
+<h2>Private and OEM distribution (worth knowing)</h2>
+<ul>
+<li><b>Private listing / direct URL:</b> distribute the <code>04t</code> to named customers without a public
+listing.</li>
+<li><b>OEM / embedded:</b> your app is sold with embedded Salesforce licences.</li>
+<li><span class="badge b-unk">Verify</span> which of these still require Security Review and which
+partner agreements apply &mdash; this is contractual, not technical, and you should never advise a customer
+from memory.</li>
+</ul>
+
+<h2>What you should be able to explain</h2>
+<ul class="check">
+<li>The difference between a package, a solution, and a listing</li>
+<li>Why a package can be installed without ever touching AppExchange</li>
+<li>What the LMA gives you and where it lives</li>
+<li>What happens to existing customers when you point the listing at a new version</li>
+<li>Which parts of this page are process that changes, and where to check the current truth</li>
+</ul>
+
+  <nav class="pager"><a class="prev" href="14-cicd.html"><span>Previous</span>14 &middot; CI/CD</a><a class="next" href="16-day-plan.html"><span>Next</span>16 &middot; Day-by-day plan</a></nav>
+  <footer class="sitefoot">
+    <p>Built as a personal learning course. Salesforce behaviour changes between releases &mdash;
+    always confirm against <a href="https://developer.salesforce.com/docs/atlas.en-us.sfdx_dev.meta/sfdx_dev/">Salesforce DX Developer Guide</a>
+    and the <a href="https://developer.salesforce.com/docs/atlas.en-us.packagingGuide.meta/packagingGuide/">ISVforce / Packaging guides</a>
+    before you rely on a detail in production.</p>
+  </footer>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

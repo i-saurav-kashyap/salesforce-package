@@ -1,0 +1,192 @@
+<p class="lead">You cannot learn packaging with a Hello World. Packaging problems only appear when you
+have an object customers store data in, Apex customers cannot edit, a UI that carries your namespace,
+permissions you must ship, and configuration customers are allowed to change. So we build that first.</p>
+
+<div class="note"><p><b>Everything on this page already exists on disk</b>, in
+<code>sample-project/</code> next to this site. The code blocks below are read directly from those files,
+so what you see is what you deploy.</p></div>
+
+<h2>The product: &ldquo;Ops Toolkit&rdquo;</h2>
+<p>A field-operations add-on. A customer's dispatcher raises <b>Service Requests</b> against an Account,
+the system applies an <b>SLA</b> to compute a due date, and a console lets a field lead see what is open
+and close it out.</p>
+<p>It ships as <b>two 2GP packages</b> plus <b>one 1GP package</b> used purely for the legacy exercise:</p>
+<div class="tablewrap">
+<table>
+<thead><tr><th>Package</th><th>Generation</th><th>Contains</th><th>Depends on</th></tr></thead>
+<tbody>
+<tr><td><b>Ops Toolkit Core</b></td><td>2GP</td><td>Service_Request__c + fields, validation rule, list view, Ops_Setting__mdt + a record, custom labels, tab, <code>ServiceRequestService</code>, <code>ServiceRequestSelector</code>, <code>OpsSettings</code>, tests, permission set</td><td>&mdash;</td></tr>
+<tr><td><b>Ops Toolkit Field Ops</b></td><td>2GP</td><td><code>serviceRequestConsole</code> LWC, <code>ServiceRequestConsoleController</code>, Lightning app, flow, permission set</td><td><b>Ops Toolkit Core</b></td></tr>
+<tr><td><b>Ops Toolkit Core (1GP)</b></td><td>1GP</td><td>The same core metadata, deployed into a 1GP packaging org</td><td>&mdash;</td></tr>
+</tbody>
+</table>
+</div>
+
+<h2>Why each component type is in the build</h2>
+<div class="tablewrap">
+<table>
+<thead><tr><th>Component</th><th>Why it exists in this app</th><th>What it teaches you about packaging</th></tr></thead>
+<tbody>
+<tr><td><b>Custom object</b> <code>Service_Request__c</code></td><td>Somewhere to store requests</td><td>The hardest thing to change after release. Object/field API names and field <i>types</i> are effectively permanent</td></tr>
+<tr><td><b>Custom fields</b> (text, picklist, date, lookup, formula)</td><td>Real data shape</td><td>Restricted picklists, <code>required</code> flags and formula fields all behave differently on upgrade &mdash; see <a href="12-install.html">upgrades</a></td></tr>
+<tr><td><b>Validation rule</b></td><td>Stop nonsense dates</td><td>Packaged rules fire in the subscriber org and can break <i>their</i> data loads. Deliberately conservative</td></tr>
+<tr><td><b>List view</b></td><td>Usable out of the box</td><td>Ships once; subscribers can then edit their copy</td></tr>
+<tr><td><b>Custom Metadata Type</b> <code>Ops_Setting__mdt</code> + record</td><td>SLA days &amp; default priority</td><td>The correct way to ship <b>configuration with defaults</b> that survives upgrades and that admins may change</td></tr>
+<tr><td><b>Custom labels</b></td><td>All UI strings</td><td>Translation, and changing wording without changing code &mdash; and labels are namespaced too</td></tr>
+<tr><td><b>Apex service + selector</b></td><td>Business logic and all SOQL</td><td><code>global</code> vs <code>public</code> is an <b>irreversible API decision</b>; selectors are where Security Review looks first</td></tr>
+<tr><td><b>Apex tests</b></td><td>Prove behaviour</td><td><b>75% coverage is a hard gate</b> for releasing a managed version, and tests run again inside subscriber orgs in some flows</td></tr>
+<tr><td><b>LWC</b> <code>serviceRequestConsole</code></td><td>The UI</td><td>Namespacing of components, labels and Apex imports; <code>@AuraEnabled</code> methods are part of your public surface</td></tr>
+<tr><td><b>Lightning app + tab</b></td><td>Somewhere to click</td><td>Apps/tabs must be granted by <i>your</i> permission set &mdash; subscriber profiles are not yours to edit</td></tr>
+<tr><td><b>Permission sets</b> (two)</td><td>Grant access to everything above</td><td><b>The single most common install failure</b>: package installs fine, nobody can see anything, because access was assumed from a profile</td></tr>
+<tr><td><b>Record-triggered flow</b></td><td>Default the due date</td><td>Subscribers cannot edit packaged flows &mdash; a real constraint on where you put logic</td></tr>
+<tr><td><b>Second package (Field Ops)</b></td><td>The console</td><td>The whole point of <a href="11-dependencies.html">Part 11</a>: a real, compile-time dependency</td></tr>
+</tbody>
+</table>
+</div>
+
+<h2>Project structure</h2>
+[[diagram]]
+sample-project/
+├── sfdx-project.json                  ← THE definition of your 2GP packages (source of truth)
+├── .gitignore                         ← must exclude .sf/ .sfdx/ *.key
+├── config/
+│   ├── project-scratch-def.json       ← shape of a DEV scratch org (namespaced)
+│   └── customer-like-scratch-def.json ← shape of an INSTALL-TEST org (Enterprise, sample data)
+├── scripts/
+│   ├── create-dev-org.sh              ← create org + push + permsets + seed data
+│   ├── create-install-test-org.sh     ← create clean org + install a 04t like a customer
+│   ├── build-versions.sh              ← create beta versions in dependency order
+│   └── apex/seed-data.apex            ← sample data, never packaged
+├── packages/
+│   ├── core/main/default/             ← PACKAGE 1 ("Ops Toolkit Core")
+│   │   ├── classes/                   ← OpsSettings, ServiceRequestService, Selector, tests
+│   │   ├── objects/
+│   │   │   ├── Service_Request__c/    ← object + fields + validationRules + listViews
+│   │   │   └── Ops_Setting__mdt/      ← the Custom Metadata TYPE (schema)
+│   │   ├── customMetadata/            ← the Custom Metadata RECORD (data that ships)
+│   │   ├── labels/                    ← CustomLabels.labels-meta.xml (one file, many labels)
+│   │   ├── permissionsets/            ← Ops_Core_User
+│   │   └── tabs/                      ← Service_Request__c tab
+│   └── field-ops/main/default/        ← PACKAGE 2 ("Ops Toolkit Field Ops")
+│       ├── applications/              ← Ops_Toolkit Lightning app
+│       ├── classes/                   ← ServiceRequestConsoleController + test
+│       ├── flows/                     ← built in Flow Builder, retrieved here
+│       ├── lwc/serviceRequestConsole/ ← html + js + js-meta.xml
+│       └── permissionsets/            ← Ops_Field_Ops_User
+└── 1gp/                               ← the SAME core app, prepared for a 1GP packaging org
+    ├── sfdx-project.json              ← note: NO namespace key (the org owns the namespace)
+    └── force-app/main/default/
+[[/diagram]]
+
+<h3>What each directory is, precisely</h3>
+<ul>
+<li><b><code>packages/&lt;name&gt;/</code></b> &mdash; a <i>package directory</i>. In 2GP, the boundary of a package is
+literally &ldquo;the files under this path&rdquo;. Move a file between these folders and you have moved it between
+packages. That is why the folder layout is an architectural decision, not cosmetics.</li>
+<li><b><code>main/default/</code></b> &mdash; convention inherited from the DX default project. Nothing magic; it
+keeps room for other bundles (<code>main/test/</code>) later.</li>
+<li><b><code>config/*.json</code></b> &mdash; scratch org <i>definition</i> files. Not packaged. They describe the org you
+want the Dev Hub to build.</li>
+<li><b><code>scripts/</code></b> &mdash; not packaged. Your local automation. Everything here should also be runnable by CI.</li>
+<li><b><code>sfdx-project.json</code></b> &mdash; the most important file in a 2GP repo. Package names, versions,
+dependencies, namespace, and the auto-maintained <code>packageAliases</code> map from friendly names to
+<code>0Ho</code>/<code>04t</code> IDs. <b>Always commit it after creating a version.</b></li>
+</ul>
+
+<h2>The files that matter</h2>
+
+<h3>sfdx-project.json</h3>
+[[file sample-project/sfdx-project.json json]]
+<div class="tablewrap">
+<table>
+<thead><tr><th>Key</th><th>Meaning</th></tr></thead>
+<tbody>
+<tr><td><code>path</code></td><td>The folder whose contents form this package</td></tr>
+<tr><td><code>package</code></td><td>Friendly name. On first <code>sf package create</code> this gets an alias mapping to a <code>0Ho</code> ID</td></tr>
+<tr><td><code>versionNumber</code></td><td><code>major.minor.patch.NEXT</code> &mdash; <code>NEXT</code> lets the build auto-increment the build number</td></tr>
+<tr><td><code>versionName</code></td><td>Human label shown in the subscriber's installed-packages list</td></tr>
+<tr><td><code>dependencies</code></td><td>Other packages that must be installed first. <code>LATEST</code> resolves at build time</td></tr>
+<tr><td><code>namespace</code></td><td>Applies to <b>all</b> packages in this project, and makes scratch orgs namespaced by default</td></tr>
+<tr><td><code>packageAliases</code></td><td>Auto-written by the CLI: name &rarr; <code>0Ho</code>, and <code>Name@1.0.0-1</code> &rarr; <code>04t</code></td></tr>
+</tbody>
+</table>
+</div>
+
+<h3>The object</h3>
+[[file sample-project/packages/core/main/default/objects/Service_Request__c/Service_Request__c.object-meta.xml xml]]
+<div class="warn"><p><b>Decisions here are close to permanent.</b> <code>sharingModel</code> (the OWD),
+the auto-number format, the API name, and the field types below can be extremely difficult or impossible
+to change after a released version ships. Think about them now, not in version 1.3.</p></div>
+
+<h3>Configuration that ships and can be changed by admins</h3>
+[[file sample-project/packages/core/main/default/customMetadata/Ops_Setting.Default.md-meta.xml xml]]
+<p>This is a <b>record</b>, packaged alongside its <b>type</b>. It gives every subscriber a working default
+on install, and the subscriber can edit the values without you shipping anything.
+<span class="badge b-doc">Documented</span> Whether a later package version overwrites subscriber edits
+depends on the field's/record's <b>protected</b> setting and how you deploy it &mdash; see
+<a href="12-install.html">upgrade behaviour</a>.</p>
+
+<h3>Business logic &mdash; and your first irreversible API decision</h3>
+[[file sample-project/packages/core/main/default/classes/ServiceRequestService.cls apex]]
+<div class="stop">
+<p><b>Read the <code>global</code> keywords again.</b> In a managed package:</p>
+<ul>
+<li><code>public</code> = visible only inside your namespace. You can change it freely forever.</li>
+<li><code>global</code> = visible to subscribers and other packages. <b>Once released you can never change
+its signature, never remove it, and never make it less visible.</b> You can only add.</li>
+</ul>
+<p>Beginners mark everything <code>global</code> &ldquo;to be safe&rdquo;. That is the opposite of safe: it freezes your
+internals forever. Mark <code>global</code> only what is genuinely an API.</p>
+</div>
+
+<h3>All SOQL in one place</h3>
+[[file sample-project/packages/core/main/default/classes/ServiceRequestSelector.cls apex]]
+<p>Three Security-Review-relevant patterns are in that file: <code>with sharing</code>,
+<code>WITH USER_MODE</code> / <code>AccessLevel.USER_MODE</code>, and an <b>allow-list</b> for the dynamic
+<code>ORDER BY</code>. <a href="13-security.html">Part 13</a> makes you break and fix each one.</p>
+
+<h3>Tests &mdash; the thing that gates your release</h3>
+[[file sample-project/packages/core/main/default/classes/ServiceRequestServiceTest.cls apex]]
+
+<h3>The dependent package's controller</h3>
+[[file sample-project/packages/field-ops/main/default/classes/ServiceRequestConsoleController.cls apex]]
+
+<h3>The LWC</h3>
+[[file sample-project/packages/field-ops/main/default/lwc/serviceRequestConsole/serviceRequestConsole.js javascript]]
+[[file sample-project/packages/field-ops/main/default/lwc/serviceRequestConsole/serviceRequestConsole.html html]]
+<div class="note"><p><b>What the namespace does to this component.</b> In your dev org you use
+<code>&lt;c-service-request-console&gt;</code>. In a subscriber org, after install, the same component is
+<code>&lt;opskit-service-request-console&gt;</code>, the label import <code>c.Ops_Request_Created</code>
+resolves to <code>opskit__Ops_Request_Created</code>, and the Apex import resolves to
+<code>opskit.ServiceRequestConsoleController</code>. You write <code>c.</code>; the platform rewrites it.
+This is exactly why you must test in a <b>non-namespaced org with the package installed</b>.</p></div>
+
+<h3>Permission set &mdash; the most commonly forgotten component</h3>
+[[file sample-project/packages/core/main/default/permissionsets/Ops_Core_User.permissionset-meta.xml xml]]
+<div class="tip"><p><b>Rule of thumb:</b> for every component you add to a package, ask &ldquo;which permission
+set grants access to this?&rdquo; Object, fields, Apex classes, tabs, apps, and record types all need explicit
+grants. If your answer is &ldquo;the admin will do it&rdquo;, your install experience is broken.</p></div>
+
+<h2>Build and run it (in a scratch org, before any packaging)</h2>
+[[code bash]]
+cd sample-project
+git init && git add -A && git commit -m "feat: ops toolkit application"
+
+# create a dev scratch org, push, assign permission sets, seed data, open it
+./scripts/create-dev-org.sh dev1 7
+
+# run all tests with coverage - this must be green before you package anything
+sf apex run test --target-org dev1 --code-coverage --result-format human --wait 10
+[[/code]]
+<p><b>Verification for this stage:</b></p>
+<ul class="check">
+<li><code>sf project deploy start</code> completes with no errors</li>
+<li>All Apex tests pass and org-wide coverage is above 75%</li>
+<li>You can open the <b>Service Requests</b> tab and create a record; the due date defaults to today + SLA days</li>
+<li>The validation rule rejects a due date before the requested date</li>
+<li>The <b>Service Request Console</b> LWC lists open requests on an app page and can complete them</li>
+<li>Everything is committed to Git</li>
+</ul>
+
+<div class="stop"><p><b>Do not go further until this passes.</b> Every packaging error you meet from
+here is much easier to diagnose when you know the application itself is sound.</p></div>

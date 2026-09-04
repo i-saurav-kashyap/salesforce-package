@@ -1,0 +1,360 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pipelines for ISV Packaging &middot; AppExchange From Zero</title>
+<link rel="stylesheet" href="assets/site.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<button class="navtoggle" aria-label="Toggle navigation">&#9776; Contents</button>
+<div class="shell">
+<nav class="sidenav" id="sidenav">
+  <div class="brand">
+    <span class="brand-mark">SF</span>
+    <span class="brand-text">AppExchange<br><b>From Zero</b></span>
+  </div>
+  <ol class="navlist">
+    <li><a href="index.html">Start here</a></li>
+    <li><a href="01-big-picture.html">1 &middot; Big picture</a></li>
+    <li><a href="02-orgs.html">2 &middot; Org architecture</a></li>
+    <li><a href="03-prereqs.html">3 &middot; Prerequisites</a></li>
+    <li><a href="04-the-app.html">4 &middot; The app</a></li>
+    <li><a href="05-1gp.html">5 &middot; 1GP concepts</a></li>
+    <li><a href="06-1gp-lifecycle.html">6 &middot; 1GP lifecycle</a></li>
+    <li><a href="07-2gp.html">7 &middot; 2GP concepts</a></li>
+    <li><a href="08-2gp-build.html">8 &middot; 2GP build</a></li>
+    <li><a href="09-scratch-orgs.html">9 &middot; Scratch orgs</a></li>
+    <li><a href="10-compare.html">10 &middot; 1GP vs 2GP</a></li>
+    <li><a href="11-dependencies.html">11 &middot; Dependencies</a></li>
+    <li><a href="12-install.html">12 &middot; Install &amp; upgrade</a></li>
+    <li><a href="13-security.html">13 &middot; Security Review</a></li>
+    <li class="here"><a href="14-cicd.html">14 &middot; CI/CD</a></li>
+    <li><a href="15-appexchange.html">15 &middot; AppExchange</a></li>
+    <li><a href="16-day-plan.html">16 &middot; Day-by-day plan</a></li>
+    <li><a href="17-debugging.html">17 &middot; Debug drills</a></li>
+    <li><a href="17b-error-index.html">17b &middot; Error index</a></li>
+    <li><a href="18-backend.html">18 &middot; Behind the scenes</a></li>
+    <li><a href="19-commands.html">19 &middot; Command cheat sheet</a></li>
+    <li><a href="20-quiz.html">20 &middot; Knowledge test</a></li>
+  </ol>
+  <div class="navfoot">
+    <p>Local course site.<br>Regenerate with <code>python3 build.py</code></p>
+  </div>
+</nav>
+<main id="main">
+  <header class="pagehead">
+    <p class="kicker">Part 14</p>
+    <h1>Pipelines for ISV Packaging</h1>
+  </header>
+  <p class="lead">2GP exists so that this page is possible. Once Git is the source of truth, releasing is
+just a job that runs commands &mdash; and the discipline that keeps 1GP shops awake at night becomes a YAML
+file.</p>
+
+<h2>The pipeline</h2>
+<pre class="diagram"> Developer
+    │  local: sf project deploy start · sf apex run test · sf code-analyzer run
+    ▼
+ Git branch  ──push──►  Pull Request
+                            │
+                     ┌──────┴──────────────────────────────────┐  GitHub Actions
+                     │ 1. Static analysis (Code Analyzer)      │
+                     │ 2. Create scratch org (from Dev Hub)    │
+                     │ 3. Deploy source                        │
+                     │ 4. Run all Apex tests + coverage        │
+                     │ 5. Delete scratch org (always)          │
+                     └──────┬──────────────────────────────────┘
+                            │ green
+                            ▼
+                        Merge to main
+                            │
+                     ┌──────┴──────────────────────────────────┐  GitHub Actions (tag / manual)
+                     │ 6. sf package version create (BETA)     │
+                     │ 7. Install into clean NON-namespaced org│
+                     │ 8. Run tests in the installed org       │
+                     │ 9. Manual approval                      │
+                     │10. sf package version promote (RELEASE) │
+                     │11. Commit packageAliases + tag          │
+                     └──────┬──────────────────────────────────┘
+                            ▼
+                    QA org → UAT/demo org → Security Review → AppExchange</pre>
+
+<h2>Where each thing runs</h2>
+<div class="tablewrap">
+<table>
+<thead><tr><th>Runs</th><th>What</th><th>Why there</th></tr></thead>
+<tbody>
+<tr><td><b>Locally</b></td><td>Deploy to your scratch org, run tests, run the scanner, Jest tests, Prettier</td><td>Fast feedback. Never let CI be the first place a test runs</td></tr>
+<tr><td><b>GitHub Actions</b></td><td>Orchestration: auth, org creation, deploy, test, package version create/install/promote, cleanup</td><td>Reproducible, auditable, no laptop involved</td></tr>
+<tr><td><b>Salesforce</b></td><td>The actual work: org provisioning, metadata deploy, Apex compilation, test execution, package build</td><td>CI is only a driver &mdash; every heavy step happens in Salesforce</td></tr>
+</tbody>
+</table>
+</div>
+
+<h2>Authentication in CI &mdash; JWT, not passwords</h2>
+<p>Interactive OAuth cannot work in a runner. The supported answer is the <b>JWT bearer flow</b>: a
+Connected App in the Dev Hub trusts a certificate you hold.</p>
+<ol class="steps">
+<li><b>Generate a key pair</b> (keep <code>server.key</code> out of Git, forever):
+<div class="codewrap"><div class="codebar"><span>bash</span><button class="copy" type="button">Copy</button></div><pre class="code"><code>openssl req -x509 -sha256 -nodes -days 3650 -newkey rsa:2048 \
+  -keyout server.key -out server.crt \
+  -subj &quot;/CN=OpsToolkitCI&quot;</code></pre></div>
+</li>
+<li><b>Create a Connected App</b> in the Dev Hub: Setup &rarr; App Manager &rarr; New Connected App.
+Enable OAuth, callback URL <code>http://localhost:1717/OauthRedirect</code>, scopes
+<code>api</code>, <code>refresh_token offline_access</code>, <b>Use digital signatures</b> &rarr; upload
+<code>server.crt</code>. Save the <b>Consumer Key</b>.</li>
+<li><b>Pre-authorise your user</b>: Manage &rarr; Edit Policies &rarr; Permitted Users =
+<i>Admin approved users are pre-authorized</i>, then assign a profile/permission set that includes your
+CI user.</li>
+<li><b>Test it locally before trusting CI:</b>
+<div class="codewrap"><div class="codebar"><span>bash</span><button class="copy" type="button">Copy</button></div><pre class="code"><code>sf org login jwt --client-id &lt;CONSUMER_KEY&gt; \
+  --jwt-key-file server.key --username ci-user@example.com \
+  --set-default-dev-hub --alias devhub</code></pre></div>
+</li>
+<li><b>Store secrets</b> in GitHub &rarr; Settings &rarr; Secrets and variables &rarr; Actions:
+<code>DEVHUB_CLIENT_ID</code>, <code>DEVHUB_USERNAME</code>, <code>DEVHUB_JWT_KEY</code> (the whole PEM),
+<code>PACKAGE_INSTALL_KEY</code>.</li>
+</ol>
+<div class="stop"><p><b>Secret hygiene, non-negotiable:</b> the private key never enters the repo; the
+workflow writes it to a file and deletes it in the same step; secrets are never <code>echo</code>ed; use
+environment protection rules so only the release workflow can read release secrets. A leaked Dev Hub
+key means someone else can publish package versions under your identity.</p></div>
+
+<h2>Workflow 1 &mdash; PR validation</h2>
+<div class="codewrap"><div class="codebar"><span>sample-project/.github/workflows/pr-validation.yml</span><button class="copy" type="button">Copy</button></div><pre class="code"><code>name: PR validation
+
+# Runs on every pull request: static analysis, then a real scratch org where the
+# source is deployed and all Apex tests run. Nothing here creates a package version.
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: &#x27;20&#x27;
+
+      - name: Install Salesforce CLI
+        run: npm install --global @salesforce/cli
+
+      - name: Authenticate Dev Hub (JWT)
+        env:
+          DEVHUB_CLIENT_ID: ${{ secrets.DEVHUB_CLIENT_ID }}
+          DEVHUB_USERNAME: ${{ secrets.DEVHUB_USERNAME }}
+          DEVHUB_JWT_KEY: ${{ secrets.DEVHUB_JWT_KEY }}
+        run: |
+          echo &quot;$DEVHUB_JWT_KEY&quot; &gt; server.key
+          sf org login jwt \
+            --client-id &quot;$DEVHUB_CLIENT_ID&quot; \
+            --jwt-key-file server.key \
+            --username &quot;$DEVHUB_USERNAME&quot; \
+            --set-default-dev-hub --alias devhub
+          rm -f server.key
+
+      - name: Static analysis
+        run: |
+          sf plugins install code-analyzer
+          sf code-analyzer run --workspace ./packages --severity-threshold 2
+
+      - name: Create scratch org
+        run: |
+          sf org create scratch --definition-file config/project-scratch-def.json \
+            --alias ci --duration-days 1 --wait 20 --set-default
+
+      - name: Deploy source
+        run: sf project deploy start --target-org ci
+
+      - name: Run Apex tests
+        run: |
+          sf apex run test --target-org ci --code-coverage --wait 30 \
+            --result-format junit --output-dir test-results \
+            --test-level RunLocalTests
+
+      - name: Publish test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: apex-test-results
+          path: test-results
+
+      - name: Always delete the scratch org
+        if: always()
+        run: sf org delete scratch --target-org ci --no-prompt || true</code></pre></div>
+<div class="tablewrap">
+<table>
+<thead><tr><th>Step</th><th>Talks to</th><th>Fails when</th></tr></thead>
+<tbody>
+<tr><td>Install CLI</td><td>npm</td><td>Registry hiccup; pin a version if you need determinism</td></tr>
+<tr><td>JWT login</td><td>Dev Hub</td><td>Key/cert mismatch, user not pre-authorised, wrong username</td></tr>
+<tr><td>Code Analyzer</td><td>Local files</td><td>A finding above your threshold</td></tr>
+<tr><td>Create scratch org</td><td>Dev Hub</td><td><b>Daily/active scratch org limit</b> &mdash; the most common CI failure</td></tr>
+<tr><td>Deploy source</td><td>Scratch org</td><td>Compile errors, missing dependencies</td></tr>
+<tr><td>Apex tests</td><td>Scratch org</td><td>Failures or coverage below your bar</td></tr>
+<tr><td>Delete scratch org</td><td>Dev Hub</td><td>Runs with <code>if: always()</code> so a failed job does not leak an org</td></tr>
+</tbody>
+</table>
+</div>
+
+<h2>Workflow 2 &mdash; build, install-test, promote</h2>
+<div class="codewrap"><div class="codebar"><span>sample-project/.github/workflows/package-release.yml</span><button class="copy" type="button">Copy</button></div><pre class="code"><code>name: Build and release package versions
+
+# Triggered manually or by a tag. Creates BETA versions, installs them into a clean
+# customer-like org, runs the packaged tests there, and (optionally) promotes.
+on:
+  workflow_dispatch:
+    inputs:
+      promote:
+        description: &#x27;Promote the created versions to released&#x27;
+        type: boolean
+        default: false
+  push:
+    tags: [&#x27;v*&#x27;]
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: &#x27;20&#x27;
+
+      - run: npm install --global @salesforce/cli
+
+      - name: Authenticate Dev Hub (JWT)
+        env:
+          DEVHUB_CLIENT_ID: ${{ secrets.DEVHUB_CLIENT_ID }}
+          DEVHUB_USERNAME: ${{ secrets.DEVHUB_USERNAME }}
+          DEVHUB_JWT_KEY: ${{ secrets.DEVHUB_JWT_KEY }}
+        run: |
+          echo &quot;$DEVHUB_JWT_KEY&quot; &gt; server.key
+          sf org login jwt --client-id &quot;$DEVHUB_CLIENT_ID&quot; --jwt-key-file server.key \
+            --username &quot;$DEVHUB_USERNAME&quot; --set-default-dev-hub --alias devhub
+          rm -f server.key
+
+      - name: Create Core version
+        id: core
+        run: |
+          sf package version create --package &quot;Ops Toolkit Core&quot; \
+            --installation-key &quot;${{ secrets.PACKAGE_INSTALL_KEY }}&quot; \
+            --code-coverage --wait 60 --json &gt; core.json
+          echo &quot;id=$(jq -r &#x27;.result.SubscriberPackageVersionId&#x27; core.json)&quot; &gt;&gt; &quot;$GITHUB_OUTPUT&quot;
+
+      - name: Create Field Ops version
+        id: fieldops
+        run: |
+          sf package version create --package &quot;Ops Toolkit Field Ops&quot; \
+            --installation-key &quot;${{ secrets.PACKAGE_INSTALL_KEY }}&quot; \
+            --code-coverage --wait 60 --json &gt; fieldops.json
+          echo &quot;id=$(jq -r &#x27;.result.SubscriberPackageVersionId&#x27; fieldops.json)&quot; &gt;&gt; &quot;$GITHUB_OUTPUT&quot;
+
+      - name: Install into a clean customer-like org
+        run: |
+          sf org create scratch --definition-file config/customer-like-scratch-def.json \
+            --alias installtest --duration-days 1 --no-namespace --wait 20
+          for id in ${{ steps.core.outputs.id }} ${{ steps.fieldops.outputs.id }}; do
+            sf package install --package &quot;$id&quot; \
+              --installation-key &quot;${{ secrets.PACKAGE_INSTALL_KEY }}&quot; \
+              --target-org installtest --wait 30 --publish-wait 30 --no-prompt
+          done
+          sf package installed list --target-org installtest
+
+      - name: Run the packaged tests inside the install-test org
+        run: sf apex run test --target-org installtest --wait 30 --result-format human
+
+      - name: Promote (only when asked)
+        if: ${{ github.event.inputs.promote == &#x27;true&#x27; }}
+        run: |
+          sf package version promote --package &quot;${{ steps.core.outputs.id }}&quot; --no-prompt
+          sf package version promote --package &quot;${{ steps.fieldops.outputs.id }}&quot; --no-prompt
+
+      - name: Commit updated package aliases
+        run: |
+          git config user.name  &quot;github-actions[bot]&quot;
+          git config user.email &quot;github-actions[bot]@users.noreply.github.com&quot;
+          git add sfdx-project.json
+          git commit -m &quot;chore: record package version aliases [skip ci]&quot; || echo &quot;nothing to commit&quot;
+          git push || true
+
+      - name: Clean up
+        if: always()
+        run: sf org delete scratch --target-org installtest --no-prompt || true</code></pre></div>
+<div class="note"><p><b>The install-test step is the point of this workflow.</b> Creating a version proves
+it compiles. Installing it into a clean non-namespaced org and running the tests <i>there</i> proves it
+works the way a customer will experience it. Skipping that step is how &ldquo;it built fine&rdquo; becomes a
+support escalation.</p></div>
+
+<h3>Design choices worth copying</h3>
+<ul>
+<li><b>Promotion is manual and explicit</b> (<code>workflow_dispatch</code> input, or a protected
+environment requiring approval). Promotion is irreversible &mdash; it should never happen by accident on a
+merge.</li>
+<li><b>Beta on every merge, release on a tag.</b> Betas are cheap; use them constantly.</li>
+<li><b>The workflow commits <code>sfdx-project.json</code></b> so the new <code>04t</code> aliases are recorded
+in Git. Without this, the repo forgets which commit became which version.</li>
+<li><b>Every org is deleted in an <code>always()</code> step.</b> Leaked scratch orgs exhaust your limits and
+then block everyone.</li>
+<li><b>Version numbers are bumped in a PR</b>, not by CI. Deciding &ldquo;this is 1.1 not 1.0.1&rdquo; is a human
+decision about compatibility.</li>
+</ul>
+
+<h2>Branch and version strategy</h2>
+<div class="tablewrap">
+<table>
+<thead><tr><th>Branch</th><th>Builds</th><th>Dependencies</th><th>Ancestry</th></tr></thead>
+<tbody>
+<tr><td><code>feature/*</code></td><td>Nothing (PR validation only)</td><td><code>LATEST</code></td><td>&mdash;</td></tr>
+<tr><td><code>main</code></td><td>Beta on merge</td><td><code>LATEST</code></td><td>Ancestor = last released</td></tr>
+<tr><td><code>release/1.1</code></td><td>Beta &rarr; approved &rarr; promote</td><td><b>Pinned</b></td><td>Ancestor = 1.0.x</td></tr>
+<tr><td><code>hotfix/1.0.1</code></td><td>Patch version</td><td>Pinned to what 1.0 used</td><td>Ancestor = 1.0.0</td></tr>
+</tbody>
+</table>
+</div>
+<p>Tag every promoted version: <code>git tag -a core-v1.1.0 -m "04t..."</code>. The tag message containing
+the <code>04t</code> has saved more incidents than any dashboard.</p>
+
+<h2>What to add next (in order of value)</h2>
+<ol>
+<li><b>Jest tests for LWC</b> (<code>npm run test:unit</code>) in the PR job &mdash; fast and catches real bugs.</li>
+<li><b>Prettier + ESLint</b> as a pre-commit hook, so formatting never appears in review diffs.</li>
+<li><b>An upgrade-test job</b>: create an org, install the <i>previous released</i> version, seed data,
+install the new version, assert the data survived. This is the highest-value job in an ISV pipeline and
+almost nobody has it.</li>
+<li><b>Scheduled dependency check</b>: nightly job that reports if a dependency has a newer released
+version.</li>
+<li><b>Release notes generation</b> from the commit range between tags.</li>
+</ol>
+
+<h2>Verification</h2>
+<ul class="check">
+<li>JWT login works locally with the same key CI will use</li>
+<li>A PR triggers validation and it goes green</li>
+<li>A deliberately failing test blocks the PR</li>
+<li>The release workflow produces a <code>04t</code> and installs it into a clean org</li>
+<li>Scratch orgs are always deleted, even when the job fails</li>
+<li>Promotion requires a human action</li>
+<li>The repo contains the alias for every version you have built</li>
+</ul>
+
+  <nav class="pager"><a class="prev" href="13-security.html"><span>Previous</span>13 &middot; Security Review</a><a class="next" href="15-appexchange.html"><span>Next</span>15 &middot; AppExchange</a></nav>
+  <footer class="sitefoot">
+    <p>Built as a personal learning course. Salesforce behaviour changes between releases &mdash;
+    always confirm against <a href="https://developer.salesforce.com/docs/atlas.en-us.sfdx_dev.meta/sfdx_dev/">Salesforce DX Developer Guide</a>
+    and the <a href="https://developer.salesforce.com/docs/atlas.en-us.packagingGuide.meta/packagingGuide/">ISVforce / Packaging guides</a>
+    before you rely on a detail in production.</p>
+  </footer>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

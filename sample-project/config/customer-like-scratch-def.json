@@ -1,0 +1,9 @@
+{
+  "orgName": "Ops Toolkit Customer Sim",
+  "edition": "Enterprise",
+  "hasSampleData": true,
+  "features": ["EnableSetPasswordInApi"],
+  "settings": {
+    "lightningExperienceSettings": { "enableS1DesktopEnabled": true }
+  }
+}

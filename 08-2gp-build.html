@@ -1,0 +1,242 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Build the Same App as a 2GP &middot; AppExchange From Zero</title>
+<link rel="stylesheet" href="assets/site.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<button class="navtoggle" aria-label="Toggle navigation">&#9776; Contents</button>
+<div class="shell">
+<nav class="sidenav" id="sidenav">
+  <div class="brand">
+    <span class="brand-mark">SF</span>
+    <span class="brand-text">AppExchange<br><b>From Zero</b></span>
+  </div>
+  <ol class="navlist">
+    <li><a href="index.html">Start here</a></li>
+    <li><a href="01-big-picture.html">1 &middot; Big picture</a></li>
+    <li><a href="02-orgs.html">2 &middot; Org architecture</a></li>
+    <li><a href="03-prereqs.html">3 &middot; Prerequisites</a></li>
+    <li><a href="04-the-app.html">4 &middot; The app</a></li>
+    <li><a href="05-1gp.html">5 &middot; 1GP concepts</a></li>
+    <li><a href="06-1gp-lifecycle.html">6 &middot; 1GP lifecycle</a></li>
+    <li><a href="07-2gp.html">7 &middot; 2GP concepts</a></li>
+    <li class="here"><a href="08-2gp-build.html">8 &middot; 2GP build</a></li>
+    <li><a href="09-scratch-orgs.html">9 &middot; Scratch orgs</a></li>
+    <li><a href="10-compare.html">10 &middot; 1GP vs 2GP</a></li>
+    <li><a href="11-dependencies.html">11 &middot; Dependencies</a></li>
+    <li><a href="12-install.html">12 &middot; Install &amp; upgrade</a></li>
+    <li><a href="13-security.html">13 &middot; Security Review</a></li>
+    <li><a href="14-cicd.html">14 &middot; CI/CD</a></li>
+    <li><a href="15-appexchange.html">15 &middot; AppExchange</a></li>
+    <li><a href="16-day-plan.html">16 &middot; Day-by-day plan</a></li>
+    <li><a href="17-debugging.html">17 &middot; Debug drills</a></li>
+    <li><a href="17b-error-index.html">17b &middot; Error index</a></li>
+    <li><a href="18-backend.html">18 &middot; Behind the scenes</a></li>
+    <li><a href="19-commands.html">19 &middot; Command cheat sheet</a></li>
+    <li><a href="20-quiz.html">20 &middot; Knowledge test</a></li>
+  </ol>
+  <div class="navfoot">
+    <p>Local course site.<br>Regenerate with <code>python3 build.py</code></p>
+  </div>
+</nav>
+<main id="main">
+  <header class="pagehead">
+    <p class="kicker">Part 8</p>
+    <h1>Build the Same App as a 2GP</h1>
+  </header>
+  <p class="lead">The same application, as a 2GP managed package, from an empty repo to a released version
+a customer can install. Every command lists: why you run it, which org it talks to, what authentication
+it uses, what API is behind it, what changes locally, and what changes in Salesforce.</p>
+
+<pre class="diagram">GitHub → DX project → sfdx-project.json → namespace → Dev Hub → scratch org
+   → develop → test → sf package create → sf package version create (beta)
+   → install into a clean org → fix → new version → promote (released) → install → upgrade</pre>
+
+<h2>Step 1 &mdash; Repo and project</h2>
+<div class="codewrap"><div class="codebar"><span>bash</span><button class="copy" type="button">Copy</button></div><pre class="code"><code>cd sample-project
+git init
+git add -A &amp;&amp; git commit -m &quot;feat: ops toolkit core + field ops&quot;
+gh repo create ops-toolkit --private --source=. --push     # or create it in the GitHub UI</code></pre></div>
+<div class="tablewrap"><table><tbody>
+<tr><th>Why</th><td>In 2GP the repo <b>is</b> the package. Doing this first is not ceremony.</td></tr>
+<tr><th>Org involved</th><td>None.</td></tr>
+<tr><th>Changes locally</th><td><code>.git/</code>, a remote.</td></tr>
+<tr><th>Changes in Salesforce</th><td>Nothing.</td></tr>
+</tbody></table></div>
+
+<h2>Step 2 &mdash; Authenticate the Dev Hub and register/link the namespace</h2>
+<div class="codewrap"><div class="codebar"><span>bash</span><button class="copy" type="button">Copy</button></div><pre class="code"><code>sf org login web --alias devhub --set-default-dev-hub
+sf org login web --alias nsorg                # the DE org that owns the namespace
+sf org list --all</code></pre></div>
+<p>In <code>nsorg</code>: register the namespace (Setup &rarr; Package Manager &rarr; Developer Settings &rarr; Edit).
+In <code>devhub</code>: App Launcher &rarr; <b>Namespace Registries</b> &rarr; <b>Link Namespace</b> &rarr; authenticate as
+the <code>nsorg</code> admin.</p>
+<div class="tablewrap"><table><tbody>
+<tr><th>Why</th><td>The Dev Hub must be allowed to stamp your namespace onto package versions.</td></tr>
+<tr><th>Auth used</th><td>Interactive OAuth in both cases; the link stores a trust relationship in the Dev Hub.</td></tr>
+<tr><th>Verify</th><td>Namespace Registries list shows the namespace; <code>sfdx-project.json</code>'s <code>namespace</code> matches it <b>exactly</b>.</td></tr>
+<tr><th>Common error</th><td><code>The namespace 'opskit' is not linked to this Dev Hub</code> &mdash; you either linked a different org or typo'd the namespace in the project file.</td></tr>
+</tbody></table></div>
+
+<h2>Step 3 &mdash; Develop in a scratch org</h2>
+<div class="codewrap"><div class="codebar"><span>bash</span><button class="copy" type="button">Copy</button></div><pre class="code"><code>./scripts/create-dev-org.sh dev1 7
+# equivalently, by hand:
+sf org create scratch -f config/project-scratch-def.json -a dev1 -d 7 --set-default
+sf project deploy start --target-org dev1
+sf org assign permset --name Ops_Core_User --name Ops_Field_Ops_User --target-org dev1
+sf apex run test --target-org dev1 --code-coverage --result-format human</code></pre></div>
+<div class="tablewrap"><table><tbody>
+<tr><th>Which org</th><td>Request goes to the <b>Dev Hub</b>; the resulting org is a new scratch org.</td></tr>
+<tr><th>Salesforce API</th><td>The CLI inserts a <code>ScratchOrgInfo</code> record (Tooling/SOAP) in the Dev Hub; org provisioning does the rest; then a Metadata API deploy for your source.</td></tr>
+<tr><th>Namespaced?</th><td><b>Yes</b> &mdash; because <code>sfdx-project.json</code> has a <code>namespace</code>. Your components appear as <code>opskit__…</code>, exactly as a customer will see them.</td></tr>
+<tr><th>Verify</th><td>Tests green, app usable, <code>sf org open</code> works.</td></tr>
+</tbody></table></div>
+
+<h2>Step 4 &mdash; Create the package definitions (once per package, ever)</h2>
+<div class="codewrap"><div class="codebar"><span>bash</span><button class="copy" type="button">Copy</button></div><pre class="code"><code>sf package create \
+  --name &quot;Ops Toolkit Core&quot; \
+  --package-type Managed \
+  --path packages/core \
+  --description &quot;Core objects and services for Ops Toolkit&quot; \
+  --target-dev-hub devhub
+
+sf package create \
+  --name &quot;Ops Toolkit Field Ops&quot; \
+  --package-type Managed \
+  --path packages/field-ops \
+  --description &quot;Field operations console&quot; \
+  --target-dev-hub devhub
+
+sf package list --target-dev-hub devhub --verbose
+git diff sfdx-project.json      # look at what the CLI wrote</code></pre></div>
+<div class="tablewrap"><table><tbody>
+<tr><th>Why</th><td>Registers the package identity with Salesforce. Done <b>once</b>; not per version.</td></tr>
+<tr><th>Which org</th><td>Dev Hub.</td></tr>
+<tr><th>API</th><td>Tooling API &mdash; inserts a <code>Package2</code> record.</td></tr>
+<tr><th>Creates</th><td>A <code>0Ho</code> package ID.</td></tr>
+<tr><th>Changes locally</th><td><code>packageAliases</code> gains <code>"Ops Toolkit Core": "0Ho..."</code>. <b>Commit this.</b></td></tr>
+<tr><th>Common errors</th><td><code>Namespace not linked</code> (Step 2 incomplete); <code>2GP not enabled</code> (Dev Hub setting); <code>Package name already in use</code> in this Dev Hub.</td></tr>
+</tbody></table></div>
+
+<h2>Step 5 &mdash; Create a BETA version of Core</h2>
+<div class="codewrap"><div class="codebar"><span>bash</span><button class="copy" type="button">Copy</button></div><pre class="code"><code>sf package version create \
+  --package &quot;Ops Toolkit Core&quot; \
+  --installation-key &quot;LearnPackaging123&quot; \
+  --code-coverage \
+  --wait 30 \
+  --target-dev-hub devhub</code></pre></div>
+<div class="tablewrap"><table><tbody>
+<tr><th>Why</th><td>Turn source into an installable artifact.</td></tr>
+<tr><th>Which org</th><td>Dev Hub &mdash; but the actual build happens in a Salesforce-managed environment (see <a href="18-backend.html">Part 18</a>).</td></tr>
+<tr><th>API</th><td>Tooling API &mdash; inserts a <code>Package2VersionCreateRequest</code> (<code>08c</code>) and polls it.</td></tr>
+<tr><th>What Salesforce does</th><td>Reads your <code>packages/core</code> source, spins up a build org, installs declared dependencies, deploys the metadata, compiles Apex, runs your tests (because of <code>--code-coverage</code>), records coverage, and mints a <code>Package2Version</code> (<code>05i</code>) with a <code>SubscriberPackageVersionId</code> (<code>04t</code>).</td></tr>
+<tr><th>Changes locally</th><td><code>packageAliases</code> gains <code>"Ops Toolkit Core@1.0.0-1": "04t..."</code>.</td></tr>
+<tr><th>Expect to see</th><td>A <code>Successfully created the package version</code> message with the <code>04t</code> and a ready-to-paste install URL.</td></tr>
+<tr><th>Duration</th><td>Minutes, not seconds. 5&ndash;20 is normal; it is building an org.</td></tr>
+</tbody></table></div>
+<p>If it fails, do not guess &mdash; read the request:</p>
+<div class="codewrap"><div class="codebar"><span>bash</span><button class="copy" type="button">Copy</button></div><pre class="code"><code>sf package version create list --target-dev-hub devhub          # recent attempts + status
+sf package version create report --package-create-request-id 08c... --target-dev-hub devhub</code></pre></div>
+
+<h2>Step 6 &mdash; Create a BETA version of Field Ops (the dependent package)</h2>
+<div class="codewrap"><div class="codebar"><span>bash</span><button class="copy" type="button">Copy</button></div><pre class="code"><code>sf package version create \
+  --package &quot;Ops Toolkit Field Ops&quot; \
+  --installation-key &quot;LearnPackaging123&quot; \
+  --code-coverage --wait 40 --target-dev-hub devhub</code></pre></div>
+<p>The declared dependency <code>{"package":"Ops Toolkit Core","versionNumber":"1.0.0.LATEST"}</code> makes
+Salesforce install Core's latest 1.0.0 build into the build environment <b>before</b> compiling Field Ops.
+That is why <code>ServiceRequestConsoleController</code> can reference <code>ServiceRequestService</code> and still
+compile. Remove the dependency and this step fails with a compile error &mdash; try it once on purpose
+(<a href="17-debugging.html">drill 8</a>).</p>
+
+<h2>Step 7 &mdash; Install into a customer-like org</h2>
+<div class="codewrap"><div class="codebar"><span>bash</span><button class="copy" type="button">Copy</button></div><pre class="code"><code>./scripts/create-install-test-org.sh 04t...CORE LearnPackaging123
+# then the dependent package into the SAME org:
+sf package install --package 04t...FIELDOPS --installation-key &quot;LearnPackaging123&quot; \
+  --target-org customer1 --wait 20 --publish-wait 20 --no-prompt
+
+sf package installed list --target-org customer1</code></pre></div>
+<div class="tablewrap"><table><tbody>
+<tr><th>Which org</th><td>The clean, <b>non-namespaced</b> scratch org.</td></tr>
+<tr><th>API</th><td>Tooling API <code>PackageInstallRequest</code>; the CLI polls until Success.</td></tr>
+<tr><th>Order matters</th><td>Core first. Installing Field Ops into an org without Core fails with a missing-dependency error naming the required <code>04t</code>.</td></tr>
+<tr><th>Verify</th><td>Assign both permission sets to a non-admin user and use the app. Confirm namespace prefixes, the CMDT default row, the LWC on an app page, and that Apex is not editable.</td></tr>
+</tbody></table></div>
+
+<h2>Step 8 &mdash; Promote to Released</h2>
+<div class="codewrap"><div class="codebar"><span>bash</span><button class="copy" type="button">Copy</button></div><pre class="code"><code>sf package version promote --package &quot;Ops Toolkit Core@1.0.0-1&quot; --target-dev-hub devhub
+sf package version promote --package &quot;Ops Toolkit Field Ops@1.0.0-1&quot; --target-dev-hub devhub
+sf package version list --released --target-dev-hub devhub</code></pre></div>
+<div class="tablewrap"><table><tbody>
+<tr><th>Why</th><td>Only released versions can be installed in production, listed on AppExchange, or used as an ancestor.</td></tr>
+<tr><th>Requirement</th><td>≥75% Apex code coverage recorded at version-create time. If you created the version without <code>--code-coverage</code>, promotion fails and you must build a new version.</td></tr>
+<tr><th>Irreversible</th><td>Yes. There is no demote.</td></tr>
+<tr><th>Tag it</th><td><code>git tag -a core-v1.0.0 -m "Ops Toolkit Core 1.0.0 (04t...)" &amp;&amp; git push --tags</code></td></tr>
+</tbody></table></div>
+
+<h2>Step 9 &mdash; Ship 1.1 with ancestry, and upgrade a customer</h2>
+<p>Edit <code>sfdx-project.json</code>:</p>
+<div class="codewrap"><div class="codebar"><span>json</span><button class="copy" type="button">Copy</button></div><pre class="code"><code>{
+  &quot;path&quot;: &quot;packages/core&quot;,
+  &quot;package&quot;: &quot;Ops Toolkit Core&quot;,
+  &quot;versionName&quot;: &quot;Summer Release&quot;,
+  &quot;versionNumber&quot;: &quot;1.1.0.NEXT&quot;,
+  &quot;ancestorVersion&quot;: &quot;1.0.0.1&quot;,
+  &quot;default&quot;: true
+}</code></pre></div>
+<div class="codewrap"><div class="codebar"><span>bash</span><button class="copy" type="button">Copy</button></div><pre class="code"><code># add something additive first (a new field + a new global method), then:
+sf package version create --package &quot;Ops Toolkit Core&quot; \
+  --installation-key &quot;LearnPackaging123&quot; --code-coverage --wait 30
+sf package version promote --package &quot;Ops Toolkit Core@1.1.0-1&quot;
+
+# upgrade the customer org that already has 1.0
+sf package install --package 04t...CORE_1_1 --installation-key &quot;LearnPackaging123&quot; \
+  --target-org customer1 --wait 20 --no-prompt
+sf package installed list --target-org customer1</code></pre></div>
+<p><b>Verify the whole point:</b> records created under 1.0 still exist with their data; the new field is
+present and empty; the customer never re-entered anything.</p>
+
+<h2>Command reference for this page</h2>
+<div class="tablewrap">
+<table>
+<thead><tr><th>Command</th><th>Talks to</th><th>Creates / changes</th></tr></thead>
+<tbody>
+<tr><td><code>sf package create</code></td><td>Dev Hub</td><td><code>Package2</code> (0Ho) + alias in <code>sfdx-project.json</code></td></tr>
+<tr><td><code>sf package version create</code></td><td>Dev Hub &rarr; build service</td><td><code>08c</code> request &rarr; <code>05i</code> version &rarr; <code>04t</code> + alias</td></tr>
+<tr><td><code>sf package version create report</code></td><td>Dev Hub</td><td>Nothing &mdash; reads the request, including the error</td></tr>
+<tr><td><code>sf package version list</code></td><td>Dev Hub</td><td>Nothing &mdash; lists versions, coverage, released flag</td></tr>
+<tr><td><code>sf package version promote</code></td><td>Dev Hub</td><td>Flips <code>IsReleased</code> &mdash; permanent</td></tr>
+<tr><td><code>sf package install</code></td><td>Target org</td><td><code>PackageInstallRequest</code> in that org</td></tr>
+<tr><td><code>sf package installed list</code></td><td>Target org</td><td>Nothing &mdash; shows installed versions</td></tr>
+<tr><td><code>sf package version report</code></td><td>Dev Hub</td><td>Nothing &mdash; details of one version incl. dependencies</td></tr>
+</tbody>
+</table>
+</div>
+
+<h2>Verification gate</h2>
+<ul class="check">
+<li>Two packages exist in <code>sf package list</code> with <code>0Ho</code> IDs</li>
+<li>Both have at least one version with a <code>04t</code>, and <code>packageAliases</code> is committed</li>
+<li>Both installed into a clean non-namespaced org, in dependency order</li>
+<li>A non-admin user with only your permission sets can use the app</li>
+<li>Both versions promoted; <code>sf package version list --released</code> shows them</li>
+<li>A 1.1 built with <code>ancestorVersion</code>, installed as an <b>upgrade</b>, data preserved</li>
+<li>Git tags exist for each released version</li>
+</ul>
+
+  <nav class="pager"><a class="prev" href="07-2gp.html"><span>Previous</span>7 &middot; 2GP concepts</a><a class="next" href="09-scratch-orgs.html"><span>Next</span>9 &middot; Scratch orgs</a></nav>
+  <footer class="sitefoot">
+    <p>Built as a personal learning course. Salesforce behaviour changes between releases &mdash;
+    always confirm against <a href="https://developer.salesforce.com/docs/atlas.en-us.sfdx_dev.meta/sfdx_dev/">Salesforce DX Developer Guide</a>
+    and the <a href="https://developer.salesforce.com/docs/atlas.en-us.packagingGuide.meta/packagingGuide/">ISVforce / Packaging guides</a>
+    before you rely on a detail in production.</p>
+  </footer>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

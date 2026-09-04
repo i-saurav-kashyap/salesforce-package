@@ -1,0 +1,7 @@
+.sf/
+.sfdx/
+.localdevserver/
+node_modules/
+*.key
+*.log
+deploy-options.json

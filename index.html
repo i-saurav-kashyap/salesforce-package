@@ -1,0 +1,515 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Salesforce AppExchange From Zero</title>
+<link rel="stylesheet" href="assets/site.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<button class="navtoggle" aria-label="Toggle navigation">&#9776; Contents</button>
+<div class="shell">
+<nav class="sidenav" id="sidenav">
+  <div class="brand">
+    <span class="brand-mark">SF</span>
+    <span class="brand-text">AppExchange<br><b>From Zero</b></span>
+  </div>
+  <ol class="navlist">
+    <li class="here"><a href="index.html">Start here</a></li>
+    <li><a href="01-big-picture.html">1 &middot; Big picture</a></li>
+    <li><a href="02-orgs.html">2 &middot; Org architecture</a></li>
+    <li><a href="03-prereqs.html">3 &middot; Prerequisites</a></li>
+    <li><a href="04-the-app.html">4 &middot; The app</a></li>
+    <li><a href="05-1gp.html">5 &middot; 1GP concepts</a></li>
+    <li><a href="06-1gp-lifecycle.html">6 &middot; 1GP lifecycle</a></li>
+    <li><a href="07-2gp.html">7 &middot; 2GP concepts</a></li>
+    <li><a href="08-2gp-build.html">8 &middot; 2GP build</a></li>
+    <li><a href="09-scratch-orgs.html">9 &middot; Scratch orgs</a></li>
+    <li><a href="10-compare.html">10 &middot; 1GP vs 2GP</a></li>
+    <li><a href="11-dependencies.html">11 &middot; Dependencies</a></li>
+    <li><a href="12-install.html">12 &middot; Install &amp; upgrade</a></li>
+    <li><a href="13-security.html">13 &middot; Security Review</a></li>
+    <li><a href="14-cicd.html">14 &middot; CI/CD</a></li>
+    <li><a href="15-appexchange.html">15 &middot; AppExchange</a></li>
+    <li><a href="16-day-plan.html">16 &middot; Day-by-day plan</a></li>
+    <li><a href="17-debugging.html">17 &middot; Debug drills</a></li>
+    <li><a href="17b-error-index.html">17b &middot; Error index</a></li>
+    <li><a href="18-backend.html">18 &middot; Behind the scenes</a></li>
+    <li><a href="19-commands.html">19 &middot; Command cheat sheet</a></li>
+    <li><a href="20-quiz.html">20 &middot; Knowledge test</a></li>
+  </ol>
+  <div class="navfoot">
+    <p>Local course site.<br>Regenerate with <code>python3 build.py</code></p>
+  </div>
+</nav>
+<main id="main">
+  <header class="pagehead">
+    <p class="kicker">Course home &amp; Stage 0</p>
+    <h1>Salesforce AppExchange From Zero</h1>
+  </header>
+  <p class="lead">This site is your course. It takes you from an empty laptop to a working
+AppExchange-style product: an application you build, package as <b>1GP</b> and <b>2GP</b>,
+version, make depend on other packages, install as a customer, upgrade, harden for Security
+Review, automate in CI, and list on AppExchange.</p>
+
+<div class="note">
+<p><b>How to use this site.</b> Work the pages in order. Each page ends with verification steps.
+<b>Do not move to the next stage until the current stage's verification passes</b> &mdash; packaging mistakes
+are cheap to fix on day 2 and expensive to fix after a version is released, because
+<b>a released managed package version can never be deleted or altered</b>
+(beta versions can still be deleted). If you opened these files directly in the browser
+(<code>file://</code>), Copy buttons work more reliably when you serve the folder instead:
+<code>python3 -m http.server</code> from this directory, then visit
+<code>http://localhost:8000</code>.</p>
+</div>
+
+<h2>Truth markers used everywhere on this site</h2>
+<p>Salesforce packaging has a lot of folklore. Every non-obvious claim on this site carries one of
+these markers so you always know how much to trust it:</p>
+<div class="tablewrap">
+<table>
+<thead><tr><th>Marker</th><th>Means</th><th>How you should treat it</th></tr></thead>
+<tbody>
+<tr><td><span class="badge b-doc">Documented</span></td><td>Published Salesforce behaviour (ISVforce Guide, Packaging guides, DX Developer Guide, CLI reference).</td><td>Rely on it, but re-check the release notes each seasonal release.</td></tr>
+<tr><td><span class="badge b-inf">Inference</span></td><td>A reasonable architectural conclusion from observable behaviour, not something Salesforce states in those words.</td><td>Useful mental model. Never quote it as policy in a customer conversation.</td></tr>
+<tr><td><span class="badge b-unk">Verify</span></td><td>Salesforce does not publicly expose this, it varies by org/edition/licence, or it changes often.</td><td>Test it in your own org or ask Partner Support before you depend on it.</td></tr>
+</tbody>
+</table>
+</div>
+<p>You will also see <span class="badge b-1gp">1GP</span> and <span class="badge b-2gp">2GP</span>
+where a statement is true for only one packaging generation.</p>
+
+<h2>1 &middot; The final architecture</h2>
+<p>This is the whole system you are going to build. Read it top to bottom: your laptop at the top,
+a paying customer at the bottom. The left column is the <b>1GP</b> path (legacy, learn it to understand
+the ecosystem). The right column is the <b>2GP</b> path (what Salesforce recommends for new products).</p>
+
+<div class="legend">
+  <span><span class="swatch" style="background:var(--panel)"></span> Shared by both generations</span>
+  <span><span class="swatch" style="background:var(--panel-2)"></span> 1GP-only</span>
+  <span><span class="swatch" style="background:var(--brand-soft)"></span> 2GP-only</span>
+</div>
+
+<svg class="arch" viewBox="0 0 920 800" role="img" aria-label="End to end ISV architecture from developer machine to customer org">
+  <title>End-to-end ISV architecture</title>
+  <desc>Laptop and Git at the top, then a 1GP packaging-org path on the left and a 2GP Dev Hub path on the right, merging into test org, Security Review, AppExchange listing, and the customer org.</desc>
+  <defs>
+    <marker id="ar" markerWidth="9" markerHeight="9" refX="7" refY="3.2" orient="auto">
+      <path d="M0,0 L7,3.2 L0,6.4 z" fill="var(--ink-3)"/>
+    </marker>
+  </defs>
+  <g stroke="var(--ink-3)" stroke-width="1.4" fill="none" marker-end="url(#ar)">
+    <line x1="460" y1="54" x2="460" y2="76"/>
+    <polyline points="460,124 460,146 230,146 230,172"/>
+    <polyline points="460,124 460,146 690,146 690,172"/>
+    <line x1="230" y1="228" x2="230" y2="248"/>
+    <line x1="230" y1="294" x2="230" y2="314"/>
+    <line x1="690" y1="218" x2="690" y2="238"/>
+    <line x1="690" y1="284" x2="690" y2="304"/>
+    <line x1="690" y1="350" x2="690" y2="368"/>
+    <line x1="690" y1="422" x2="690" y2="442"/>
+    <polyline points="230,360 230,500 455,500 455,518"/>
+    <polyline points="690,488 690,500 468,500 468,518"/>
+    <line x1="460" y1="564" x2="460" y2="584"/>
+    <line x1="460" y1="630" x2="460" y2="650"/>
+    <line x1="460" y1="696" x2="460" y2="716"/>
+  </g>
+  <g font-size="12.5" fill="var(--ink)">
+    <!-- shared top -->
+    <rect x="330" y="8" width="260" height="46" rx="10" fill="var(--panel)" stroke="var(--line)"/>
+    <text x="460" y="28" text-anchor="middle" font-weight="700">Developer machine</text>
+    <text x="460" y="44" text-anchor="middle" fill="var(--ink-3)" font-size="11.5">VS Code &middot; sf CLI &middot; Node &middot; Git</text>
+
+    <rect x="330" y="78" width="260" height="46" rx="10" fill="var(--panel)" stroke="var(--line)"/>
+    <text x="460" y="98" text-anchor="middle" font-weight="700">Git repository (GitHub)</text>
+    <text x="460" y="114" text-anchor="middle" fill="var(--ink-3)" font-size="11.5">metadata + sfdx-project.json + CI</text>
+
+    <!-- lane titles -->
+    <text x="230" y="166" text-anchor="middle" font-size="11.5" font-weight="700" fill="var(--ink-3)">1GP PATH (LEGACY)</text>
+    <text x="690" y="166" text-anchor="middle" font-size="11.5" font-weight="700" fill="var(--brand)">2GP PATH (RECOMMENDED)</text>
+
+    <!-- 1GP lane -->
+    <rect x="60" y="172" width="340" height="56" rx="10" fill="var(--panel-2)" stroke="var(--line)"/>
+    <text x="230" y="192" text-anchor="middle" font-weight="700">Packaging org (Developer Edition)</text>
+    <text x="230" y="208" text-anchor="middle" fill="var(--ink-3)" font-size="11.5">namespace lives here &middot; org is the source of truth</text>
+    <text x="230" y="222" text-anchor="middle" fill="var(--ink-3)" font-size="11.5">must survive forever</text>
+
+    <rect x="60" y="248" width="340" height="46" rx="10" fill="var(--panel-2)" stroke="var(--line)"/>
+    <text x="230" y="268" text-anchor="middle" font-weight="700">1GP package &nbsp;033&hellip;</text>
+    <text x="230" y="284" text-anchor="middle" fill="var(--ink-3)" font-size="11.5">created in Setup &rarr; Package Manager</text>
+
+    <rect x="60" y="314" width="340" height="46" rx="10" fill="var(--panel-2)" stroke="var(--line)"/>
+    <text x="230" y="334" text-anchor="middle" font-weight="700">Package version &nbsp;04t&hellip;</text>
+    <text x="230" y="350" text-anchor="middle" fill="var(--ink-3)" font-size="11.5">Upload: Beta &rarr; Managed-Released</text>
+
+    <!-- 2GP lane -->
+    <rect x="520" y="172" width="340" height="46" rx="10" fill="var(--brand-soft)" stroke="var(--line)"/>
+    <text x="690" y="192" text-anchor="middle" font-weight="700">Dev Hub (in Partner Business Org)</text>
+    <text x="690" y="208" text-anchor="middle" fill="var(--ink-3)" font-size="11.5">owns packages, versions, scratch org limits</text>
+
+    <rect x="520" y="238" width="340" height="46" rx="10" fill="var(--brand-soft)" stroke="var(--line)"/>
+    <text x="690" y="258" text-anchor="middle" font-weight="700">Namespace Registry</text>
+    <text x="690" y="274" text-anchor="middle" fill="var(--ink-3)" font-size="11.5">DE &ldquo;namespace org&rdquo; linked to the Dev Hub</text>
+
+    <rect x="520" y="304" width="340" height="46" rx="10" fill="var(--brand-soft)" stroke="var(--line)"/>
+    <text x="690" y="324" text-anchor="middle" font-weight="700">Scratch orgs (throwaway)</text>
+    <text x="690" y="340" text-anchor="middle" fill="var(--ink-3)" font-size="11.5">dev org (namespaced) + install-test org</text>
+
+    <rect x="520" y="368" width="340" height="54" rx="10" fill="var(--brand-soft)" stroke="var(--line)"/>
+    <text x="690" y="388" text-anchor="middle" font-weight="700">2GP package &nbsp;0Ho&hellip;</text>
+    <text x="690" y="404" text-anchor="middle" fill="var(--ink-3)" font-size="11.5">declared in sfdx-project.json</text>
+    <text x="690" y="418" text-anchor="middle" fill="var(--ink-3)" font-size="11.5">source of truth = Git</text>
+
+    <rect x="520" y="442" width="340" height="46" rx="10" fill="var(--brand-soft)" stroke="var(--line)"/>
+    <text x="690" y="462" text-anchor="middle" font-weight="700">08c &rarr; 05i &rarr; 04t (install ID)</text>
+    <text x="690" y="478" text-anchor="middle" fill="var(--ink-3)" font-size="11.5">sf package version create / promote</text>
+
+    <!-- merged tail -->
+    <rect x="280" y="518" width="360" height="46" rx="10" fill="var(--panel)" stroke="var(--line)"/>
+    <text x="460" y="538" text-anchor="middle" font-weight="700">Test / UAT / demo org</text>
+    <text x="460" y="554" text-anchor="middle" fill="var(--ink-3)" font-size="11.5">install the 04t, run the app as a user would</text>
+
+    <rect x="280" y="584" width="360" height="46" rx="10" fill="var(--panel)" stroke="var(--line)"/>
+    <text x="460" y="604" text-anchor="middle" font-weight="700">Security Review</text>
+    <text x="460" y="620" text-anchor="middle" fill="var(--ink-3)" font-size="11.5">submitted from Partner Console (Publishing)</text>
+
+    <rect x="280" y="650" width="360" height="46" rx="10" fill="var(--panel)" stroke="var(--line)"/>
+    <text x="460" y="670" text-anchor="middle" font-weight="700">AppExchange listing</text>
+    <text x="460" y="686" text-anchor="middle" fill="var(--ink-3)" font-size="11.5">Provider &rarr; Solution &rarr; Listing &rarr; pricing/docs</text>
+
+    <rect x="280" y="716" width="360" height="46" rx="10" fill="var(--panel)" stroke="var(--line)"/>
+    <text x="460" y="736" text-anchor="middle" font-weight="700">Customer (subscriber) org</text>
+    <text x="460" y="752" text-anchor="middle" fill="var(--ink-3)" font-size="11.5">installs, upgrades, keeps their data</text>
+  </g>
+</svg>
+<p class="arch-note">On a phone, the diagram above shrinks. The ASCII version below is the readable copy.</p>
+
+<p>The same chain with generation-specific hops labelled. IDs you will see constantly:</p>
+
+<div class="tablewrap">
+<table>
+<thead><tr><th>Prefix</th><th>What it is</th><th>What you do with it</th></tr></thead>
+<tbody>
+<tr><td><code>033</code></td><td>1GP package definition</td><td>Created in Package Manager. Not what you install.</td></tr>
+<tr><td><code>0Ho</code></td><td>2GP package definition (<code>Package2</code>)</td><td>Lives in the Dev Hub / <code>sfdx-project.json</code>.</td></tr>
+<tr><td><code>08c</code></td><td>2GP version-create <i>request</i></td><td>An attempt. Failed builds still have an <code>08c</code>.</td></tr>
+<tr><td><code>05i</code></td><td>2GP version record (<code>Package2Version</code>)</td><td>The version in your Dev Hub. Not the install ID.</td></tr>
+<tr><td><code>04t</code></td><td>Subscriber package version</td><td><b>This is what you install.</b> Same prefix for 1GP and 2GP.</td></tr>
+</tbody>
+</table>
+</div>
+
+<pre class="diagram">Developer machine
+      |                       (both generations)
+Git repository
+      |
+      +-------------------------------+------------------------------------+
+      |  1GP                          |  2GP                               |
+Packaging org (DE)              Dev Hub (in PBO)                           |
+  = namespace org                     |                                    |
+  = source of truth           Namespace org (DE) registered in Dev Hub     |
+      |                               |                                    |
+      |                         Scratch orgs  &lt;-- created BY the Dev Hub    |
+      |                               |                                    |
+1GP package (033)               2GP package (0Ho)                          |
+      |                               |                                    |
+Upload version (04t)            Version create (08c -&gt; 05i -&gt; 04t)         |
+  Beta -&gt; Released                Beta -&gt; promote (Released)               |
+      +-------------------------------+------------------------------------+
+                                      |
+                          Test / UAT / demo org (install 04t)
+                                      |
+                          Security Review (Partner Console)
+                                      |
+                          AppExchange listing (Provider &gt; Solution &gt; Listing)
+                                      |
+                          Customer org (install + upgrade)</pre>
+
+<div class="why">
+<p><b>The one sentence that explains the whole difference.</b>
+In 1GP, the <b>packaging org</b> holds the truth and Git is a backup.
+In 2GP, <b>Git holds the truth</b> and every org &mdash; including the build environment Salesforce
+spins up to create the version &mdash; is disposable. Everything else in this course follows from that.</p>
+</div>
+
+<h2>2 &middot; The minimum orgs you need</h2>
+<p>Full detail, including who owns each org and what happens if it disappears, is on
+<a href="02-orgs.html">Org architecture</a>. The short answer:</p>
+
+<div class="tablewrap">
+<table>
+<thead><tr><th>#</th><th>Org</th><th>Why you cannot skip it</th><th>1GP</th><th>2GP</th></tr></thead>
+<tbody>
+<tr><td>1</td><td><b>Partner Business Org</b> (PBO)<br><span style="font-size:12px;color:var(--ink-3)">from the Salesforce Partner Program</span></td><td>The only place you get Partner Console / Publishing, Environment Hub, and the ability to submit a Security Review. For a real product you enable <b>Dev Hub</b> here.</td><td>✔ (for listing)</td><td>✔ (Dev Hub + listing)</td></tr>
+<tr><td>2</td><td><b>Namespace org</b> (Developer Edition)</td><td>A namespace is 1&ndash;15 characters, globally unique, registered in <b>exactly one</b> org, and cannot be renamed or reused. <span class="badge b-2gp">2GP</span> keep this org empty &mdash; its job is only to own the namespace. <span class="badge b-1gp">1GP</span> this <i>is</i> the packaging org, so it also holds the package metadata.</td><td>✔ this org IS the packaging org</td><td>✔ linked to Dev Hub as a Namespace Registry</td></tr>
+<tr><td>3</td><td><b>Scratch orgs</b></td><td>Where you actually develop and where you test installs. They live 1&ndash;30 days (<code>--duration-days</code>), then expire. Create them as you need them; delete them when you are done so you do not burn the daily/active limits.</td><td>optional</td><td>✔ core to the workflow</td></tr>
+<tr><td>4</td><td><b>Install-test / customer-like org</b></td><td>You must install your package into an org that never saw your source, or you will ship broken permissions and namespace bugs.</td><td>✔</td><td>✔</td></tr>
+</tbody>
+</table>
+</div>
+
+<div class="tip">
+<p><b>Absolute minimum to start this course today:</b> <b>two</b> free
+<a href="https://developer.salesforce.com/signup">Developer Edition</a> orgs plus the
+<code>sf</code> CLI. Org 1 is the learning <b>Dev Hub</b>. Org 2 owns the <b>namespace</b>
+(and later doubles as the 1GP packaging org). You can build, version, install, upgrade, and
+run CI with that. You need a <b>Partner Business Org</b> only for Security Review
+(<a href="13-security.html">Part 13</a>) and AppExchange listing
+(<a href="15-appexchange.html">Part 15</a>) &mdash; and for that your company must join the
+Salesforce Partner Program.
+<span class="badge b-unk">Verify</span> Partner Program eligibility and whether your company already has a PBO before signing up for one.</p>
+<p>You <i>can</i> register a namespace in the same DE you use as Dev Hub. This course does not:
+Salesforce's 2GP docs want a separate namespace org, and keeping <code>nsorg</code> empty prevents
+the most common first-week mistake (dumping sample data into the org that must stay pristine).</p>
+</div>
+
+<div class="warn">
+<p><b>A Developer Edition Dev Hub is tiny.</b>
+<span class="badge b-doc">Documented</span> A DE or trial Dev Hub allows
+<b>3 active</b> scratch orgs and <b>6 successful creates per rolling 24 hours</b>, plus a similarly
+low daily cap on package versions. Package versions are bound to that Dev Hub: if the DE is
+deactivated, you lose the ability to create new versions of packages born there. Fine for learning;
+never use a throwaway DE as the Dev Hub of a real product. Check remaining quota with
+<code>sf org list limits --target-org devhub</code> and look at <code>ActiveScratchOrgs</code> /
+<code>DailyScratchOrgs</code>.</p>
+</div>
+
+<h2>3 &middot; The professional setup</h2>
+<p>What a real ISV team runs, and what this course builds up to:</p>
+<pre class="diagram">                        Partner Business Org  (company-owned, permanent)
+                        |            |                  |
+                    Dev Hub    Environment Hub    Partner Console / Publishing
+                        |            |                  |
+       +----------------+            |                  +-- Security Review, listings,
+       |                             |                      licenses (LMA), Trialforce
+  Namespace Registry links      creates &amp; tracks
+       |                        member orgs
+  Namespace org (DE, permanent, namespace lives here)
+       |
+  Scratch org pool  ------------------------------+
+   - dev org (namespaced)                         |
+   - CI validation org (per pull request)         |
+   - install-test org (NON-namespaced)            |
+       |                                          |
+  Package versions (04t) --&gt; QA org --&gt; UAT/demo org --&gt; Security Review --&gt; AppExchange
+                                                                              |
+                                                                        Customer orgs</pre>
+<p>Plus, on the 1GP side only, a separate long-lived <b>1GP packaging org</b> (and, when you need a
+patch, a short-lived <b>patch development org</b> branched from it). 2GP versions usually also need
+an <b>installation key</b> (<code>--installation-key</code>) or an explicit bypass; you will meet that
+when you first run <code>sf package version create</code>.</p>
+
+<h2>4 &middot; How these orgs talk to each other</h2>
+<div class="tablewrap">
+<table>
+<thead><tr><th>From &rarr; To</th><th>Mechanism</th><th>What actually moves</th></tr></thead>
+<tbody>
+<tr><td>Laptop &rarr; any org</td><td><code>sf org login web</code> stores an OAuth refresh token in <code>~/.sfdx</code> / <code>~/.sf</code>; the CLI exchanges it for access tokens</td><td>Metadata API / Tooling API / SOAP+REST calls</td></tr>
+<tr><td>Laptop &rarr; Dev Hub</td><td><code>--target-dev-hub</code> alias</td><td>Scratch org creation requests, package + version records</td></tr>
+<tr><td>Dev Hub &rarr; scratch org</td><td>Dev Hub creates the org and returns credentials; the CLI then authenticates to the new org directly</td><td><code>ScratchOrgInfo</code> record in the Dev Hub is the audit trail</td></tr>
+<tr><td>Dev Hub &rarr; namespace org</td><td>Namespace Registry link (a one-time OAuth consent)</td><td>Permission to stamp your namespace onto package versions and namespaced scratch orgs</td></tr>
+<tr><td>Laptop &rarr; 1GP packaging org</td><td>Metadata deploy/retrieve; version upload via the packaging UI or <code>sf package1 version create</code></td><td>Components; then a <code>PackageUploadRequest</code></td></tr>
+<tr><td>Any org &larr; package version</td><td>Install URL <code>/packaging/installPackage.apexp?p0=04t...</code> or <code>sf package install</code></td><td>The compiled, namespaced package payload</td></tr>
+<tr><td>PBO &rarr; Salesforce</td><td>Partner Console (Publishing Console) attaches a package version to a Solution/Listing and submits Security Review</td><td>Your listing + review submission</td></tr>
+<tr><td>Customer org &rarr; you</td><td>License Management App (LMA) in the PBO records installs</td><td><code>License</code> / <code>Subscriber</code> records <span class="badge b-unk">Verify</span> LMA must be requested from the Partner Community and installed into the PBO; it is not there by default</td></tr>
+</tbody>
+</table>
+</div>
+
+<h2>5 &middot; Stage 0 &mdash; your first practical exercise</h2>
+<p>Nothing here creates a package yet. Stage 0 exists so that when you reach Stage 1 you are not
+debugging authentication instead of learning packaging.</p>
+
+<h3>0.1 &nbsp;Install the local toolchain</h3>
+<p>Pick <b>one</b> install method and stick to it. Mixing the OS installer with npm is a classic
+PATH mess. Active Node LTS (22 or 24) if you use npm; the OS installer bundles its own Node.</p>
+<div class="codewrap"><div class="codebar"><span>bash</span><button class="copy" type="button">Copy</button></div><pre class="code"><code># --- macOS / Linux, npm method ------------------------------------------
+# Node: Active LTS (22 or 24). Git is required either way.
+brew install node git          # or: https://nodejs.org (Windows: Git for Windows)
+npm install --global @salesforce/cli
+
+# --- alternative: OS installer (bundles Node, no brew) ------------------
+# macOS/Windows pkg/exe: https://developer.salesforce.com/tools/salesforcecli
+# Then use `sf update` to stay current (npm installs use npm, not sf update).
+
+sf --version                   # expect @salesforce/cli/2.x
+sf package --help &gt;/dev/null   # packaging is often a JIT plugin; this is the real check
+
+# Optional
+sf plugins install @salesforce/plugin-packaging   # only if `sf package --help` fails
+code --install-extension salesforce.salesforcedx-vscode</code></pre></div>
+<p><b>Windows:</b> install Git for Windows and either the Salesforce CLI <code>.exe</code> or Node LTS
+then <code>npm install --global @salesforce/cli</code>. Heredocs in later steps
+(<code>&lt;&lt;'APEX'</code>) are bash; in PowerShell use a file:
+<code>sf apex run --target-org devhub --file hello.apex</code>.</p>
+<div class="warn">
+<p><b>Do not install the old <code>sfdx</code> CLI alongside <code>sf</code>.</b> Two CLIs sharing
+<code>~/.sfdx</code> is the single most common source of &ldquo;my org is authenticated but the command says
+it isn't&rdquo;. If <code>sfdx --version</code> prints <code>7.x</code>:
+<code>npm uninstall --global sfdx-cli</code> removes only an npm install. If you used the old
+<code>.pkg</code> / <code>.exe</code> installer, uninstall that from the OS as well.
+<code>sf</code> v2 still accepts most <code>sfdx</code>-era commands.</p>
+</div>
+<p>Java is <b>not</b> required for the CLI itself. You only need a JDK if you run
+<b>Salesforce Code Analyzer</b> scanners that still shell out to PMD / Graph Engine &mdash; which you
+will in <a href="13-security.html">Part 13</a>. <span class="badge b-unk">Verify</span> Code Analyzer
+versions change their Java requirement; check the plugin's docs when you install it.</p>
+
+<h3>0.2 &nbsp;Get your first two orgs</h3>
+<ol class="steps">
+<li><b>Sign up for a Developer Edition org</b> at <a href="https://developer.salesforce.com/signup">developer.salesforce.com/signup</a>.
+Use an email you control forever. The <i>username</i> (not necessarily the inbox) should be
+recognisable in a year, e.g. <code>you+devhub@example.com</code> &mdash; Gmail-style plus-addressing
+is fine if your mail host supports it. This org will be your <b>Dev Hub</b> for learning.
+DE orgs are free and have small storage limits. They <b>can be deactivated for inactivity</b>,
+so log in occasionally.
+<span class="badge b-doc">Documented</span></li>
+<li><b>Sign up for a second Developer Edition org.</b> This one will own your <b>namespace</b>. Keep it
+clean: no experiments, no sample data, no developing in it. Username e.g. <code>you+ns@example.com</code>.
+Log in every few months so the org is not deactivated &mdash; if it dies, you cannot create new
+versions in that namespace until Partner Support recovers it.
+<span class="badge b-doc">Documented</span> A namespace is permanent and org-bound: you cannot
+rename or reuse it. You <i>can</i> later link the same namespace org to a different Dev Hub
+(that is how 2GP package transfer starts).</li>
+<li><b>Find out whether your company already has a Partner Business Org.</b> Ask internally, or check
+<a href="https://partners.salesforce.com">partners.salesforce.com</a>. Do not create a duplicate PBO;
+listings and Security Reviews are tied to the company account.</li>
+</ol>
+
+<h3>0.3 &nbsp;Authenticate and prove it works</h3>
+<div class="codewrap"><div class="codebar"><span>bash</span><button class="copy" type="button">Copy</button></div><pre class="code"><code>mkdir -p ~/sf-learning &amp;&amp; cd ~/sf-learning
+
+# Git will refuse the first commit without identity. Skip if already set.
+git config --global user.name  &quot;Your Name&quot;      # use your real name
+git config --global user.email &quot;you@example.com&quot;
+
+# 1) Log in to the org that will be your Dev Hub
+sf org login web --alias devhub --set-default-dev-hub
+
+# 2) Log in to the org that will own your namespace
+sf org login web --alias nsorg
+
+# 3) Prove both are stored locally
+sf org list --all
+sf org display --target-org devhub
+
+# 4) Prove you can actually run code in the org (round-trips through the Apex API)
+sf apex run --target-org devhub &lt;&lt;&#x27;APEX&#x27;
+System.debug(&#x27;Hello from &#x27; + UserInfo.getOrganizationName());
+APEX</code></pre></div>
+<p><b>What each command talks to:</b> <code>org login web</code> opens the browser to your org's
+OAuth endpoint and stores a <b>refresh token</b> locally &mdash; it does not store your password.
+<code>org list</code> reads only local files. <code>org display</code> calls the org to confirm the token
+still works. <code>apex run</code> executes anonymous Apex through the Tooling API.</p>
+
+<h3>0.4 &nbsp;Enable Dev Hub</h3>
+<ol class="steps">
+<li>In the <code>devhub</code> org: <b>Setup &rarr; quick find &ldquo;Dev Hub&rdquo; &rarr; Dev Hub &rarr; toggle
+<i>Enable Dev Hub</i></b>. This cannot be turned back off.
+<span class="badge b-doc">Documented</span> Dev Hub is available in Developer, Enterprise, Performance,
+and Unlimited editions, and in Partner Business Orgs.</li>
+<li>Same page: enable <b>Unlocked Packages and Second-Generation Managed Packages</b>.
+Without this, <code>sf package create</code> fails. (This course builds <b>managed</b> 2GP, not
+unlocked packages; the toggle still has to be on.)</li>
+<li>Verify from the CLI &mdash; this is the real test, not the toggle:
+<div class="codewrap"><div class="codebar"><span>bash</span><button class="copy" type="button">Copy</button></div><pre class="code"><code>sf org list --all                 # devhub should show as (D) default dev hub
+sf org list limits --target-org devhub
+sf data query --target-org devhub --query &quot;SELECT Id FROM ScratchOrgInfo LIMIT 1&quot;</code></pre></div>
+If the query returns a result set (even empty) rather than
+<code>sObject type 'ScratchOrgInfo' is not supported</code>, Dev Hub is on.
+<code>list limits</code> should show <code>ActiveScratchOrgs</code> remaining 3 of 3 on a DE.</li>
+</ol>
+
+<h3>0.5 &nbsp;Create your first scratch org (the real proof)</h3>
+<div class="codewrap"><div class="codebar"><span>bash</span><button class="copy" type="button">Copy</button></div><pre class="code"><code>sf project generate --name ops-toolkit --template standard
+cd ops-toolkit
+git init &amp;&amp; git add -A &amp;&amp; git commit -m &quot;chore: empty DX project&quot;
+
+sf org create scratch \
+  --definition-file config/project-scratch-def.json \
+  --alias dev1 \
+  --duration-days 7 \
+  --wait 10 \
+  --set-default
+
+sf org open --target-org dev1</code></pre></div>
+<p><b>Behind the scenes:</b> the CLI inserts a <code>ScratchOrgInfo</code> record into your Dev Hub;
+Salesforce's org-provisioning service builds a brand-new org from your definition file, applies the
+requested edition/features/settings, and returns login credentials; the CLI then authenticates to that
+new org and saves it under the alias <code>dev1</code>. Full walk-through:
+<a href="18-backend.html">Behind the scenes</a>.</p>
+<div class="tip"><p>When you are done with a scratch org,
+<code>sf org delete scratch --target-org dev1 --no-prompt</code> returns an active slot.
+On a DE Dev Hub you only have three.</p></div>
+
+<h3>Stage 0 verification &mdash; tick every box before Stage 1</h3>
+<ul class="check">
+<li><code>sf --version</code> prints <code>@salesforce/cli/2.x</code> and no <code>sfdx 7.x</code> exists on your PATH</li>
+<li><code>sf org list --all</code> shows <code>devhub</code> marked as the default Dev Hub</li>
+<li><code>sf apex run</code> against <code>devhub</code> returns success</li>
+<li>Dev Hub is enabled, and Unlocked/2GP packages are enabled, in the Dev Hub org</li>
+<li><code>sf org list limits --target-org devhub</code> shows scratch-org quota (3/6 on a DE)</li>
+<li>A scratch org <code>dev1</code> was created and <code>sf org open</code> logs you into it</li>
+<li>You have a second DE org reserved, untouched, to own your namespace</li>
+<li>You know whether your company has a Partner Business Org (and who administers it)</li>
+<li>Git <code>user.name</code> / <code>user.email</code> are set and the DX project is committed</li>
+</ul>
+
+<div class="stop">
+<p><b>Stop here.</b> When those boxes are ticked, you are ready for <b>Stage 1</b>: the namespace and
+the application itself (<a href="04-the-app.html">The app</a>, after
+<a href="01-big-picture.html">Big picture</a> through <a href="03-prereqs.html">Prerequisites</a>).
+If you are working with a tutor, say &ldquo;Stage 0 done&rdquo; and paste any errors.</p>
+</div>
+
+<h3>When something goes wrong (it will, today)</h3>
+<p>Two pages exist for exactly this, and it is worth knowing which one you want:</p>
+<div class="cards">
+  <div class="card"><h3>Break It On Purpose</h3>
+    <p>30 staged failures with the reasoning: the error, what you will wrongly conclude, the real cause,
+    how to prove it, the fix, and the prevention. Stage 0 problems are drills 1&ndash;8.</p>
+    <p><a href="17-debugging.html">Open the drills &rarr;</a></p></div>
+  <div class="card"><h3>The Error Field Guide</h3>
+    <p>Lookup tables: symptom &rarr; cause &rarr; where to go. Plus copy-paste diagnostic playbooks, how to read
+    a debug log without drowning, subscriber-org debugging, and the governor limits that bite ISVs.</p>
+    <p><a href="17b-error-index.html">Open the field guide &rarr;</a></p></div>
+</div>
+<div class="tip"><p><b>The habit that saves you the most time:</b> before theorising, run
+<code>sf org list --all</code> and say out loud which org the failing command actually talked to. A large
+share of &ldquo;impossible&rdquo; Salesforce errors die right there.</p></div>
+
+<h2>Course map</h2>
+<div class="cards">
+  <div class="card"><h3>Foundations</h3><p>Vocabulary, orgs, prerequisites.</p>
+    <p><a href="01-big-picture.html">Big picture</a> &middot; <a href="02-orgs.html">Orgs</a> &middot; <a href="03-prereqs.html">Prereqs</a></p></div>
+  <div class="card"><h3>The application</h3><p>Ops Toolkit: objects, Apex, LWC, permission sets, flow, CMDT.</p>
+    <p><a href="04-the-app.html">Build the app</a></p></div>
+  <div class="card"><h3>1GP</h3><p>Namespace org, Package Manager, uploads, patches.</p>
+    <p><a href="05-1gp.html">Concepts</a> &middot; <a href="06-1gp-lifecycle.html">Lifecycle</a></p></div>
+  <div class="card"><h3>2GP</h3><p>Dev Hub, sfdx-project.json, versions, ancestry, promotion.</p>
+    <p><a href="07-2gp.html">Concepts</a> &middot; <a href="08-2gp-build.html">Build</a></p></div>
+  <div class="card"><h3>Scratch orgs &amp; comparison</h3><p>Namespaced vs not, source tracking, 1GP vs 2GP.</p>
+    <p><a href="09-scratch-orgs.html">Scratch orgs</a> &middot; <a href="10-compare.html">1GP vs 2GP</a></p></div>
+  <div class="card"><h3>Dependencies</h3><p>A &rarr; B &rarr; C, 1GP&rarr;2GP, dependency graphs.</p>
+    <p><a href="11-dependencies.html">Dependencies</a></p></div>
+  <div class="card"><h3>Ship it</h3><p>Installs, upgrades, Security Review, CI/CD, AppExchange.</p>
+    <p><a href="12-install.html">Install</a> &middot; <a href="13-security.html">Security</a> &middot; <a href="14-cicd.html">CI/CD</a> &middot; <a href="15-appexchange.html">AppExchange</a></p></div>
+  <div class="card"><h3>Practice</h3><p>14-day plan, internals, commands, final exam.</p>
+    <p><a href="16-day-plan.html">Plan</a> &middot; <a href="18-backend.html">Behind the scenes</a> &middot; <a href="19-commands.html">Cheat sheet</a> &middot; <a href="20-quiz.html">Test me</a></p></div>
+  <div class="card"><h3>When it breaks</h3><p>30 failure drills with root causes, plus a symptom lookup index, diagnostic playbooks and log-reading.</p>
+    <p><a href="17-debugging.html">Drills</a> &middot; <a href="17b-error-index.html">Error field guide</a></p></div>
+</div>
+
+  <nav class="pager"><a class="next" href="01-big-picture.html"><span>Next</span>1 &middot; Big picture</a></nav>
+  <footer class="sitefoot">
+    <p>Built as a personal learning course. Salesforce behaviour changes between releases &mdash;
+    always confirm against <a href="https://developer.salesforce.com/docs/atlas.en-us.sfdx_dev.meta/sfdx_dev/">Salesforce DX Developer Guide</a>
+    and the <a href="https://developer.salesforce.com/docs/atlas.en-us.packagingGuide.meta/packagingGuide/">ISVforce / Packaging guides</a>
+    before you rely on a detail in production.</p>
+  </footer>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

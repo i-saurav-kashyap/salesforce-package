@@ -1,0 +1,166 @@
+<p class="lead">Start over. Do not carry the 1GP mental model across &mdash; it will actively mislead you.
+2GP is not &ldquo;1GP with commands&rdquo;. It is a different theory of what a package <i>is</i>.</p>
+
+<div class="why">
+<p><b>1GP:</b> a package is a <b>list of components living in an org</b>. A version is a <b>snapshot of that
+org</b>.<br>
+<b>2GP:</b> a package is a <b>folder of source in your repo</b>. A version is a <b>build of that source</b>,
+compiled by Salesforce in a temporary environment it creates and throws away.</p>
+</div>
+
+<h2>Why that one change fixes everything</h2>
+<div class="tablewrap">
+<table>
+<thead><tr><th>Problem in 1GP</th><th>Why it existed</th><th>What 2GP does</th></tr></thead>
+<tbody>
+<tr><td>Two features cannot be developed in parallel</td><td>The org has exactly one state</td><td>Two Git branches, two builds</td></tr>
+<tr><td>Git drifts from the package</td><td>The org is the truth</td><td>Git <i>is</i> the truth &mdash; drift is impossible</td></tr>
+<tr><td>&ldquo;Forgot to add the component&rdquo;</td><td>Manual component list</td><td>The folder <b>is</b> the component list</td></tr>
+<tr><td>Releases are a person clicking Upload</td><td>UI-only workflow</td><td>One CLI command &rarr; CI can do it</td></tr>
+<tr><td>Dependencies are informal</td><td>No declaration mechanism</td><td>Declared in <code>sfdx-project.json</code>, enforced at build and install</td></tr>
+<tr><td>One namespace = one package</td><td>Package is org-bound</td><td>Many packages can share one namespace</td></tr>
+<tr><td>The packaging org must survive forever</td><td>It holds everything</td><td>No packaging org exists</td></tr>
+</tbody>
+</table>
+</div>
+
+<h2>The pieces</h2>
+
+<h3>Dev Hub</h3>
+<p>The org that <b>owns</b> your 2GP world. It stores:</p>
+<div class="tablewrap">
+<table>
+<thead><tr><th>Object</th><th>Holds</th><th>You query it with</th></tr></thead>
+<tbody>
+<tr><td><code>Package2</code></td><td>Package definitions (<code>0Ho</code>)</td><td><code>sf package list</code></td></tr>
+<tr><td><code>Package2Version</code></td><td>Every version built (<code>05i</code>), incl. its <code>04t</code></td><td><code>sf package version list</code></td></tr>
+<tr><td><code>Package2VersionCreateRequest</code></td><td>Each build attempt (<code>08c</code>) and why it failed</td><td><code>sf package version create list/report</code></td></tr>
+<tr><td><code>ScratchOrgInfo</code></td><td>Every scratch org</td><td><code>sf org list</code>, SOQL</td></tr>
+</tbody>
+</table>
+</div>
+<p>Everything the CLI shows you about packages is a query against these objects in the Dev Hub. That is
+worth remembering when a command output looks wrong: you can go read the raw record.</p>
+
+<h3>Namespace org &amp; the Namespace Registry</h3>
+<p>Still a DE org, still permanent, still the only place a namespace can be registered. The difference:
+in 2GP the namespace org is <b>not</b> where you build anything. You register the namespace there once and
+then <b>link</b> it to the Dev Hub:</p>
+<ol class="steps">
+<li>In the namespace org: register the namespace (identical to the 1GP steps).</li>
+<li>In the Dev Hub: App Launcher &rarr; <b>Namespace Registries</b> &rarr; <b>Link Namespace</b> &rarr; log in as the
+namespace org's admin &rarr; consent.</li>
+<li>Verify: the namespace appears in the Namespace Registries list with status Active, and
+<code>sf package create</code> stops failing with a namespace error.</li>
+</ol>
+<div class="note"><p><b>Unlocked packages</b> (a different 2GP flavour, for a customer's own internal
+metadata) can be created with <b>no namespace</b>. Managed 2GP for AppExchange always needs one.</p></div>
+
+<h3>Scratch org</h3>
+<p>Your development environment, created by the Dev Hub from a JSON definition and thrown away.
+Deep-dive: <a href="09-scratch-orgs.html">Part 9</a>. Two facts that matter here:</p>
+<ul>
+<li>If <code>sfdx-project.json</code> has a <code>namespace</code>, new scratch orgs are <b>namespaced</b> by default &mdash;
+your components get the prefix as you develop, which is what you want while building.</li>
+<li><code>--no-namespace</code> gives you a customer-like org &mdash; what you want when installing a version.</li>
+</ul>
+
+<h3>DX project &amp; <code>sfdx-project.json</code></h3>
+[[file sample-project/sfdx-project.json json]]
+<p>Line by line:</p>
+<div class="tablewrap">
+<table>
+<thead><tr><th>Key</th><th>What it controls</th><th>Gotcha</th></tr></thead>
+<tbody>
+<tr><td><code>path</code></td><td>Which files belong to this package</td><td>Moving a file between paths moves it between packages. After release, you cannot simply move a component out of a package</td></tr>
+<tr><td><code>package</code></td><td>The package's friendly name / alias</td><td>Must match a name registered by <code>sf package create</code></td></tr>
+<tr><td><code>versionNumber</code></td><td><code>1.0.0.NEXT</code></td><td><code>NEXT</code> = &ldquo;auto-increment the build number&rdquo;. You bump major/minor/patch by hand, deliberately</td></tr>
+<tr><td><code>versionName</code></td><td>Label a subscriber sees</td><td>Purely cosmetic; still, keep it meaningful</td></tr>
+<tr><td><code>dependencies</code></td><td>Other packages needed at compile and install time</td><td><code>LATEST</code> is convenient in dev and dangerous in a release build &mdash; see <a href="11-dependencies.html">Part 11</a></td></tr>
+<tr><td><code>ancestorVersion</code> / <code>ancestorId</code></td><td>The version this one upgrades from</td><td>Omit it and you get a version customers cannot upgrade to</td></tr>
+<tr><td><code>namespace</code></td><td>Applies to every package directory in the project</td><td>Different namespaces = different projects</td></tr>
+<tr><td><code>sourceApiVersion</code></td><td>API version used for deploys/retrieves</td><td>Keep it ≤ your orgs' API version</td></tr>
+<tr><td><code>packageAliases</code></td><td>Name &rarr; ID map, written by the CLI</td><td><b>Commit it.</b> It is how you and CI refer to versions by name</td></tr>
+</tbody>
+</table>
+</div>
+
+<h3>Package type</h3>
+<div class="tablewrap">
+<table>
+<thead><tr><th>Type</th><th><code>--package-type</code></th><th>Namespace</th><th>Subscriber can edit?</th><th>Use for</th></tr></thead>
+<tbody>
+<tr><td><b>Managed</b> (2GP)</td><td><code>Managed</code></td><td>Required</td><td>No</td><td>AppExchange products</td></tr>
+<tr><td><b>Unlocked</b></td><td><code>Unlocked</code></td><td>Optional</td><td>Yes</td><td>A customer's own org metadata, internal tooling</td></tr>
+</tbody>
+</table>
+</div>
+<p>Same commands, different guarantees. This course builds <b>Managed</b>.</p>
+
+<h3>Package version, beta, promotion</h3>
+<ul>
+<li><code>sf package version create</code> always produces a <b>beta</b>: installable in scratch/sandbox/DE
+orgs, not production, and <b>not part of the upgrade lineage</b>.</li>
+<li><code>sf package version promote</code> marks it <b>released</b>. That requires ≥75% Apex coverage
+computed <i>at version create time</i> &mdash; which is why you pass <code>--code-coverage</code> when creating any
+version you might promote. <span class="badge b-doc">Documented</span></li>
+<li>Promotion is irreversible. <span class="badge b-unk">Verify</span> the current expiry rules for
+unpromoted versions before relying on an old beta.</li>
+</ul>
+
+<h3>Package ancestry &mdash; the concept 1GP never needed</h3>
+<p>Because every 2GP version is built from arbitrary source, Salesforce cannot infer what a new version
+upgrades from. You declare it:</p>
+[[code json]]
+{
+  "path": "packages/core",
+  "package": "Ops Toolkit Core",
+  "versionName": "Summer Release",
+  "versionNumber": "1.1.0.NEXT",
+  "ancestorVersion": "1.0.0.1",
+  "default": true
+}
+[[/code]]
+<p>What ancestry buys you:</p>
+<ul>
+<li>Subscribers on 1.0 can <b>upgrade</b> to 1.1 (no ancestor &rarr; no upgrade path).</li>
+<li>Salesforce can <b>enforce compatibility</b> at build time &mdash; if you deleted a released
+<code>global</code> method, the version create fails instead of the customer's org failing.</li>
+<li>You can branch: a hotfix line and a feature line can each declare the same ancestor.</li>
+</ul>
+<div class="warn"><p><b>Skipping ancestry is the #1 2GP beginner mistake.</b> You ship 1.0, customers
+install it, then you build 1.1 without <code>ancestorVersion</code> &mdash; and discover that customers cannot
+upgrade, only uninstall/reinstall (losing data). <span class="badge b-unk">Verify</span> the current
+options (e.g. <code>--skip-ancestor-check</code>) and their consequences before using them.</p></div>
+
+<h3>Installation &amp; upgrade</h3>
+<p>Identical mechanics to 1GP from the subscriber's point of view: an <code>04t</code>, an install URL, an
+upgrade that preserves data. The customer cannot tell which generation your package is (except by
+looking at details in Setup). <span class="badge b-inf">Inference</span></p>
+
+<h2>What this does to your DevOps model</h2>
+<div class="tablewrap">
+<table>
+<thead><tr><th>Practice</th><th>1GP</th><th>2GP</th></tr></thead>
+<tbody>
+<tr><td>Feature branches</td><td>Not really possible &mdash; one org, one state</td><td>Natural &mdash; a branch is a buildable package</td></tr>
+<tr><td>Code review</td><td>Reviews source that may not match the org</td><td>Reviews exactly what will ship</td></tr>
+<tr><td>&ldquo;What is in version 1.2?&rdquo;</td><td>Ask the org, hope for the best</td><td><code>git diff v1.1..v1.2</code></td></tr>
+<tr><td>Release</td><td>A human clicking Upload</td><td>A CI job on a tag</td></tr>
+<tr><td>Rollback</td><td>Painful</td><td>Build a new version from an older commit (you still cannot un-release)</td></tr>
+<tr><td>Environment cost</td><td>A permanent org to protect</td><td>Ephemeral orgs, recreated on demand</td></tr>
+</tbody>
+</table>
+</div>
+<p>The practical consequence: in 2GP your <b>pull request</b> becomes the unit of change, and your
+<b>tag</b> becomes the unit of release. That is why <a href="14-cicd.html">Part 14</a> is not optional
+decoration &mdash; it is the natural end state of this model.</p>
+
+<h2>Vocabulary check</h2>
+<ul class="check">
+<li>Say what Dev Hub stores, naming three objects</li>
+<li>Explain why 2GP needs ancestry and 1GP does not</li>
+<li>Explain the difference between <code>0Ho</code>, <code>08c</code>, <code>05i</code> and <code>04t</code></li>
+<li>Explain what changes if you move a file from <code>packages/core</code> to <code>packages/field-ops</code></li>
+<li>Explain why <code>packageAliases</code> must be committed</li>
+</ul>

@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Scratch Org Strategy &middot; AppExchange From Zero</title>
+<link rel="stylesheet" href="assets/site.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<button class="navtoggle" aria-label="Toggle navigation">&#9776; Contents</button>
+<div class="shell">
+<nav class="sidenav" id="sidenav">
+  <div class="brand">
+    <span class="brand-mark">SF</span>
+    <span class="brand-text">AppExchange<br><b>From Zero</b></span>
+  </div>
+  <ol class="navlist">
+    <li><a href="index.html">Start here</a></li>
+    <li><a href="01-big-picture.html">1 &middot; Big picture</a></li>
+    <li><a href="02-orgs.html">2 &middot; Org architecture</a></li>
+    <li><a href="03-prereqs.html">3 &middot; Prerequisites</a></li>
+    <li><a href="04-the-app.html">4 &middot; The app</a></li>
+    <li><a href="05-1gp.html">5 &middot; 1GP concepts</a></li>
+    <li><a href="06-1gp-lifecycle.html">6 &middot; 1GP lifecycle</a></li>
+    <li><a href="07-2gp.html">7 &middot; 2GP concepts</a></li>
+    <li><a href="08-2gp-build.html">8 &middot; 2GP build</a></li>
+    <li class="here"><a href="09-scratch-orgs.html">9 &middot; Scratch orgs</a></li>
+    <li><a href="10-compare.html">10 &middot; 1GP vs 2GP</a></li>
+    <li><a href="11-dependencies.html">11 &middot; Dependencies</a></li>
+    <li><a href="12-install.html">12 &middot; Install &amp; upgrade</a></li>
+    <li><a href="13-security.html">13 &middot; Security Review</a></li>
+    <li><a href="14-cicd.html">14 &middot; CI/CD</a></li>
+    <li><a href="15-appexchange.html">15 &middot; AppExchange</a></li>
+    <li><a href="16-day-plan.html">16 &middot; Day-by-day plan</a></li>
+    <li><a href="17-debugging.html">17 &middot; Debug drills</a></li>
+    <li><a href="17b-error-index.html">17b &middot; Error index</a></li>
+    <li><a href="18-backend.html">18 &middot; Behind the scenes</a></li>
+    <li><a href="19-commands.html">19 &middot; Command cheat sheet</a></li>
+    <li><a href="20-quiz.html">20 &middot; Knowledge test</a></li>
+  </ol>
+  <div class="navfoot">
+    <p>Local course site.<br>Regenerate with <code>python3 build.py</code></p>
+  </div>
+</nav>
+<main id="main">
+  <header class="pagehead">
+    <p class="kicker">Part 9</p>
+    <h1>Scratch Org Strategy</h1>
+  </header>
+  <p class="lead">Scratch orgs are the reason 2GP development feels different. Understanding them properly
+removes about half of the confusion beginners have with packaging.</p>
+
+<h2>Why scratch orgs exist</h2>
+<p>Before them, a Salesforce developer's environment was a long-lived org that slowly filled with
+half-finished experiments nobody dared delete. Two developers on one org overwrote each other. Nobody
+could answer &ldquo;is this org the same as production?&rdquo;</p>
+<p>A scratch org inverts that: it is <b>defined by a file</b>, created in minutes, and expected to die.
+If your org's state matters, it is because your source is incomplete &mdash; which is exactly the bug you
+want surfaced early.</p>
+
+<h2>How the Dev Hub creates one</h2>
+<pre class="diagram"> sf org create scratch -f config/project-scratch-def.json
+        │
+        ├─► CLI reads the definition file + sfdx-project.json (namespace)
+        │
+        ├─► CLI inserts a ScratchOrgInfo record into the DEV HUB
+        │        Edition, Features, Settings, Namespace, DurationDays, AdminEmail
+        │
+        ├─► Salesforce org-provisioning service builds a NEW org from a template
+        │        applies edition, licences, features and settings
+        │
+        ├─► ScratchOrgInfo.Status → Active, with LoginUrl / SignupUsername / AuthCode
+        │
+        └─► CLI authenticates to the new org and saves it under your alias</pre>
+<p><span class="badge b-doc">Documented</span> The <code>ScratchOrgInfo</code> record is the audit trail: you
+can query it in the Dev Hub to see every scratch org ever requested, who requested it, and why a
+creation failed.</p>
+<div class="codewrap"><div class="codebar"><span>bash</span><button class="copy" type="button">Copy</button></div><pre class="code"><code>sf data query --target-org devhub --query &quot;SELECT SignupUsername, Status, ExpirationDate, ErrorCode \
+FROM ScratchOrgInfo WHERE Status != &#x27;Deleted&#x27; ORDER BY CreatedDate DESC LIMIT 10&quot;</code></pre></div>
+
+<h2>The definition file</h2>
+<div class="codewrap"><div class="codebar"><span>sample-project/config/project-scratch-def.json</span><button class="copy" type="button">Copy</button></div><pre class="code"><code>{
+  &quot;orgName&quot;: &quot;Ops Toolkit Dev&quot;,
+  &quot;edition&quot;: &quot;Developer&quot;,
+  &quot;features&quot;: [&quot;EnableSetPasswordInApi&quot;],
+  &quot;settings&quot;: {
+    &quot;lightningExperienceSettings&quot;: { &quot;enableS1DesktopEnabled&quot;: true },
+    &quot;mobileSettings&quot;: { &quot;enableS1EncryptedStoragePref2&quot;: false }
+  }
+}</code></pre></div>
+<div class="tablewrap">
+<table>
+<thead><tr><th>Key</th><th>Meaning</th><th>Notes</th></tr></thead>
+<tbody>
+<tr><td><code>edition</code></td><td>Developer, Enterprise, Group, Professional, Partner Developer, Partner Enterprise&hellip;</td><td>Changes which licences and limits exist. <b>Test against the editions your customers use.</b></td></tr>
+<tr><td><code>features</code></td><td>Opt-in capabilities: <code>PersonAccounts</code>, <code>Communities</code>, <code>ServiceCloud</code>, <code>API</code>, <code>MultiCurrency</code>, <code>StateAndCountryPicklist</code>&hellip;</td><td>A misspelled feature is a hard creation failure. <span class="badge b-unk">Verify</span> the current feature list in the DX Developer Guide &mdash; it changes every release</td></tr>
+<tr><td><code>settings</code></td><td>Metadata settings applied at creation (Lightning, Chatter, Case settings&hellip;)</td><td>Replaces the old <code>orgPreferences</code> block, which is removed</td></tr>
+<tr><td><code>hasSampleData</code></td><td>Seeds standard sample data</td><td>Handy for customer-like orgs</td></tr>
+<tr><td><code>orgName</code>, <code>adminEmail</code>, <code>country</code>, <code>language</code></td><td>Cosmetic/locale</td><td>Set <code>adminEmail</code> to a real address you can receive at</td></tr>
+</tbody>
+</table>
+</div>
+
+<h3>Two definition files, two purposes</h3>
+<div class="tablewrap">
+<table>
+<thead><tr><th></th><th><code>project-scratch-def.json</code></th><th><code>customer-like-scratch-def.json</code></th></tr></thead>
+<tbody>
+<tr><th>Purpose</th><td>Daily development</td><td>Install testing / customer simulation</td></tr>
+<tr><th>Edition</th><td>Developer</td><td>Enterprise (what most customers run)</td></tr>
+<tr><th>Namespace</th><td>Namespaced (inherited from <code>sfdx-project.json</code>)</td><td><b>Non-namespaced</b> (<code>--no-namespace</code>)</td></tr>
+<tr><th>Source pushed?</th><td>Yes, constantly</td><td><b>Never</b> &mdash; only <code>sf package install</code></td></tr>
+<tr><th>Lifetime</th><td>7 days</td><td>1&ndash;2 days</td></tr>
+</tbody>
+</table>
+</div>
+
+<h2>Namespaced vs non-namespaced scratch orgs</h2>
+<div class="tablewrap">
+<table>
+<thead><tr><th></th><th>Namespaced</th><th>Non-namespaced</th></tr></thead>
+<tbody>
+<tr><th>How</th><td>Default when <code>sfdx-project.json</code> has <code>namespace</code></td><td><code>--no-namespace</code> flag</td></tr>
+<tr><th>Your components appear as</th><td><code>opskit__Service_Request__c</code></td><td><code>Service_Request__c</code></td></tr>
+<tr><th>Good for</th><td>Development &mdash; you see prefixes exactly as customers will; namespace-sensitive bugs surface early</td><td><b>Install testing</b> &mdash; the org has no namespace of its own, so the installed package's prefix behaves exactly as in a real customer org</td></tr>
+<tr><th>Trap</th><td>Some tools/tests written without the prefix silently work here and fail elsewhere</td><td>Pushing source here gives you unprefixed components that then <i>collide</i> conceptually with the packaged ones &mdash; don't mix</td></tr>
+</tbody>
+</table>
+</div>
+<div class="why"><p><b>Why a non-namespaced org is the right customer simulation.</b> A real subscriber
+org has no namespace. When your package installs there, <i>your</i> namespace is added to your components
+and the subscriber's own components stay unprefixed. A non-namespaced scratch org with your package
+installed reproduces exactly that arrangement. A namespaced scratch org does not: it makes locally-pushed
+components look packaged when they are not, which hides the difference between &ldquo;this works because I
+pushed it&rdquo; and &ldquo;this works because it is in the package&rdquo;.</p></div>
+
+<h2>Source tracking, push, pull, deploy, retrieve</h2>
+<div class="tablewrap">
+<table>
+<thead><tr><th>Command</th><th>Direction</th><th>Works with</th><th>Notes</th></tr></thead>
+<tbody>
+<tr><td><code>sf project deploy start</code></td><td>local &rarr; org</td><td>Any org</td><td>In a source-tracked org with no flags, deploys only changed files (the modern replacement for <code>force:source:push</code>)</td></tr>
+<tr><td><code>sf project retrieve start</code></td><td>org &rarr; local</td><td>Any org</td><td>Use <code>--metadata Flow:My_Flow</code> to grab something you built in the UI</td></tr>
+<tr><td><code>sf project deploy preview</code></td><td>&mdash;</td><td>Tracked orgs</td><td>Shows what <i>would</i> deploy &mdash; use before every push when unsure</td></tr>
+<tr><td><code>sf project retrieve preview</code></td><td>&mdash;</td><td>Tracked orgs</td><td>Shows org changes you have not pulled</td></tr>
+<tr><td><code>sf project reset tracking</code></td><td>&mdash;</td><td>Tracked orgs</td><td>Nuclear option when tracking gets confused</td></tr>
+<tr><td><code>sf org delete scratch</code></td><td>&mdash;</td><td>Scratch</td><td>Frees an active-scratch-org slot immediately</td></tr>
+</tbody>
+</table>
+</div>
+<div class="warn"><p><b>Conflicts.</b> If you change a field in the org UI and the same file locally, the
+CLI stops and reports a conflict. Resolve deliberately: <code>--ignore-conflicts</code> silently discards one
+side. In a scratch org the local side is almost always the one to keep.</p></div>
+
+<h2>Expiration and limits</h2>
+<ul>
+<li><code>--duration-days</code> 1&ndash;30, default 7. An expired scratch org is <b>gone</b>, not archived.</li>
+<li>Your Dev Hub has limits on <b>active</b> scratch orgs and <b>daily</b> creations, which vary by
+edition and partner status. <span class="badge b-unk">Verify</span> yours:
+<div class="codewrap"><div class="codebar"><span>bash</span><button class="copy" type="button">Copy</button></div><pre class="code"><code>sf org list limits --target-org devhub
+sf limits api display --target-org devhub</code></pre></div>
+</li>
+<li>Hitting the daily limit is a common mid-afternoon CI failure. Delete orgs you are done with:
+<code>sf org delete scratch --target-org dev1 --no-prompt</code>.</li>
+</ul>
+
+<h2>A practical lifecycle</h2>
+<pre class="diagram">Monday morning
+  ├─ sf org create scratch -a dev1 -d 7          (namespaced, from project-scratch-def.json)
+  ├─ sf project deploy start                     (all source)
+  ├─ sf org assign permset ...                   (yourself)
+  └─ sf apex run --file scripts/apex/seed-data.apex
+
+During the week
+  ├─ edit code → sf project deploy start          (only changes)
+  ├─ built something in the UI? → sf project retrieve start --metadata Flow:X
+  ├─ sf apex run test --code-coverage             (before every commit)
+  └─ commit + push (Git is the truth, the org is not)
+
+Before packaging
+  ├─ sf package version create --code-coverage
+  ├─ sf org create scratch -a customer1 --no-namespace  (customer-like def)
+  ├─ sf package install --package 04t...
+  └─ click through the app as a NON-ADMIN user
+
+Friday
+  └─ sf org delete scratch --target-org dev1 --no-prompt
+     If deleting it makes you nervous, something important is not in Git. Fix that.</pre>
+
+<h2>Which org for which job</h2>
+<div class="tablewrap">
+<table>
+<thead><tr><th>Job</th><th>Org</th><th>Why</th></tr></thead>
+<tbody>
+<tr><td>Writing code</td><td>Namespaced scratch org, 7 days</td><td>Fast, disposable, shows prefixes</td></tr>
+<tr><td>Reviewing a colleague's PR</td><td>Fresh scratch org from their branch</td><td>Proves the branch is self-contained</td></tr>
+<tr><td>CI validation</td><td>Scratch org created and destroyed by the job</td><td>No shared state to corrupt</td></tr>
+<tr><td>Install testing</td><td><b>Non-namespaced</b> scratch org, Enterprise edition</td><td>Closest thing to a customer</td></tr>
+<tr><td>Upgrade testing</td><td>Non-namespaced org with the <b>previous released</b> version installed</td><td>The only way to test an upgrade path</td></tr>
+<tr><td>Demo / UAT</td><td>Long-lived partner test org or 30-day scratch org</td><td>Needs stable data</td></tr>
+<tr><td>Reproducing a customer bug</td><td>Their sandbox (with permission) or an org matching their edition/features</td><td>Edition and feature differences cause real bugs</td></tr>
+</tbody>
+</table>
+</div>
+
+<h2>Exercise</h2>
+<ol class="steps">
+<li>Create <code>dev1</code> (namespaced) and <code>customer1</code> (<code>--no-namespace</code>).</li>
+<li>Push source to <code>dev1</code> only. Install your package's <code>04t</code> into <code>customer1</code> only.</li>
+<li>In both orgs, open Object Manager and note the API name of the Service Request object. Explain to
+yourself why <code>dev1</code> shows <code>opskit__Service_Request__c</code> even though you never typed a prefix.</li>
+<li>In <code>customer1</code>, try to edit <code>ServiceRequestService</code>. Note the error. That is namespace
+isolation.</li>
+<li>Delete both. Recreate <code>dev1</code> from scratch in one command and confirm nothing was lost.</li>
+</ol>
+<ul class="check">
+<li>I can create either kind of org from memory</li>
+<li>I can explain why install testing needs a non-namespaced org</li>
+<li>I know how to see why a scratch org creation failed (<code>ScratchOrgInfo.ErrorCode</code>)</li>
+<li>Deleting my dev org costs me nothing</li>
+</ul>
+
+  <nav class="pager"><a class="prev" href="08-2gp-build.html"><span>Previous</span>8 &middot; 2GP build</a><a class="next" href="10-compare.html"><span>Next</span>10 &middot; 1GP vs 2GP</a></nav>
+  <footer class="sitefoot">
+    <p>Built as a personal learning course. Salesforce behaviour changes between releases &mdash;
+    always confirm against <a href="https://developer.salesforce.com/docs/atlas.en-us.sfdx_dev.meta/sfdx_dev/">Salesforce DX Developer Guide</a>
+    and the <a href="https://developer.salesforce.com/docs/atlas.en-us.packagingGuide.meta/packagingGuide/">ISVforce / Packaging guides</a>
+    before you rely on a detail in production.</p>
+  </footer>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

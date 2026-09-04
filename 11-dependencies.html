@@ -1,0 +1,373 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Building Package Dependencies &middot; AppExchange From Zero</title>
+<link rel="stylesheet" href="assets/site.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<button class="navtoggle" aria-label="Toggle navigation">&#9776; Contents</button>
+<div class="shell">
+<nav class="sidenav" id="sidenav">
+  <div class="brand">
+    <span class="brand-mark">SF</span>
+    <span class="brand-text">AppExchange<br><b>From Zero</b></span>
+  </div>
+  <ol class="navlist">
+    <li><a href="index.html">Start here</a></li>
+    <li><a href="01-big-picture.html">1 &middot; Big picture</a></li>
+    <li><a href="02-orgs.html">2 &middot; Org architecture</a></li>
+    <li><a href="03-prereqs.html">3 &middot; Prerequisites</a></li>
+    <li><a href="04-the-app.html">4 &middot; The app</a></li>
+    <li><a href="05-1gp.html">5 &middot; 1GP concepts</a></li>
+    <li><a href="06-1gp-lifecycle.html">6 &middot; 1GP lifecycle</a></li>
+    <li><a href="07-2gp.html">7 &middot; 2GP concepts</a></li>
+    <li><a href="08-2gp-build.html">8 &middot; 2GP build</a></li>
+    <li><a href="09-scratch-orgs.html">9 &middot; Scratch orgs</a></li>
+    <li><a href="10-compare.html">10 &middot; 1GP vs 2GP</a></li>
+    <li class="here"><a href="11-dependencies.html">11 &middot; Dependencies</a></li>
+    <li><a href="12-install.html">12 &middot; Install &amp; upgrade</a></li>
+    <li><a href="13-security.html">13 &middot; Security Review</a></li>
+    <li><a href="14-cicd.html">14 &middot; CI/CD</a></li>
+    <li><a href="15-appexchange.html">15 &middot; AppExchange</a></li>
+    <li><a href="16-day-plan.html">16 &middot; Day-by-day plan</a></li>
+    <li><a href="17-debugging.html">17 &middot; Debug drills</a></li>
+    <li><a href="17b-error-index.html">17b &middot; Error index</a></li>
+    <li><a href="18-backend.html">18 &middot; Behind the scenes</a></li>
+    <li><a href="19-commands.html">19 &middot; Command cheat sheet</a></li>
+    <li><a href="20-quiz.html">20 &middot; Knowledge test</a></li>
+  </ol>
+  <div class="navfoot">
+    <p>Local course site.<br>Regenerate with <code>python3 build.py</code></p>
+  </div>
+</nav>
+<main id="main">
+  <header class="pagehead">
+    <p class="kicker">Part 11</p>
+    <h1>Building Package Dependencies</h1>
+  </header>
+  <p class="lead">Dependencies are where packaging stops being paperwork and starts being architecture.
+You will build a three-package chain, then a 1GP&rarr;2GP chain, then learn to read the graph.</p>
+
+<h2>Part A &mdash; A &rarr; B &rarr; C in 2GP</h2>
+<pre class="diagram">   Package A — &quot;Ops Toolkit Core&quot;          objects, Apex utility, Custom Metadata
+        ▲
+        │ depends on
+   Package B — &quot;Ops Toolkit Field Ops&quot;     LWC, Apex service, permission set
+        ▲
+        │ depends on
+   Package C — &quot;Ops Toolkit Scheduling&quot;    advanced UI, automation, more Apex</pre>
+
+<h3>What each package holds and why</h3>
+<div class="tablewrap">
+<table>
+<thead><tr><th></th><th>A &mdash; Core</th><th>B &mdash; Field Ops</th><th>C &mdash; Scheduling</th></tr></thead>
+<tbody>
+<tr><th>Contains</th><td><code>Service_Request__c</code>, <code>Ops_Setting__mdt</code> + record, <code>ServiceRequestService</code> (global), selector, labels, tab, permission set</td><td><code>serviceRequestConsole</code> LWC, <code>ServiceRequestConsoleController</code>, Lightning app, flow, permission set</td><td><code>Crew__c</code>, <code>Assignment__c</code>, scheduling LWC, Queueable automation, permission set</td></tr>
+<tr><th>Depends on</th><td>&mdash;</td><td>A</td><td>B (and therefore A)</td></tr>
+<tr><th>Why the split</th><td>Data model + API everything else builds on. Rarely changes.</td><td>The everyday UI. Changes often.</td><td>Premium capability, sold separately, ships on its own cadence.</td></tr>
+</tbody>
+</table>
+</div>
+<div class="why"><p><b>The real reason to split packages</b> is not tidiness: it is <b>independent release
+cadence</b> and <b>independent licensing</b>. If Core and Field Ops always ship together and every customer
+gets both, they should be one package. Every extra package is real overhead &mdash; more versions, more
+install steps, more ways to be out of sync.</p></div>
+
+<h3>Creating package C</h3>
+<div class="codewrap"><div class="codebar"><span>bash</span><button class="copy" type="button">Copy</button></div><pre class="code"><code>mkdir -p packages/scheduling/main/default/{classes,lwc,objects,permissionsets}
+
+sf package create --name &quot;Ops Toolkit Scheduling&quot; --package-type Managed \
+  --path packages/scheduling --description &quot;Crew scheduling for Ops Toolkit&quot; \
+  --target-dev-hub devhub</code></pre></div>
+
+<h3>The <code>sfdx-project.json</code> that declares the chain</h3>
+<div class="codewrap"><div class="codebar"><span>json</span><button class="copy" type="button">Copy</button></div><pre class="code"><code>{
+  &quot;packageDirectories&quot;: [
+    {
+      &quot;path&quot;: &quot;packages/core&quot;,
+      &quot;package&quot;: &quot;Ops Toolkit Core&quot;,
+      &quot;versionName&quot;: &quot;Spring Release&quot;,
+      &quot;versionNumber&quot;: &quot;1.0.0.NEXT&quot;,
+      &quot;default&quot;: true
+    },
+    {
+      &quot;path&quot;: &quot;packages/field-ops&quot;,
+      &quot;package&quot;: &quot;Ops Toolkit Field Ops&quot;,
+      &quot;versionName&quot;: &quot;Spring Release&quot;,
+      &quot;versionNumber&quot;: &quot;1.0.0.NEXT&quot;,
+      &quot;dependencies&quot;: [
+        { &quot;package&quot;: &quot;Ops Toolkit Core&quot;, &quot;versionNumber&quot;: &quot;1.0.0.LATEST&quot; }
+      ]
+    },
+    {
+      &quot;path&quot;: &quot;packages/scheduling&quot;,
+      &quot;package&quot;: &quot;Ops Toolkit Scheduling&quot;,
+      &quot;versionName&quot;: &quot;Spring Release&quot;,
+      &quot;versionNumber&quot;: &quot;1.0.0.NEXT&quot;,
+      &quot;dependencies&quot;: [
+        { &quot;package&quot;: &quot;Ops Toolkit Core&quot;,     &quot;versionNumber&quot;: &quot;1.0.0.LATEST&quot; },
+        { &quot;package&quot;: &quot;Ops Toolkit Field Ops&quot;, &quot;versionNumber&quot;: &quot;1.0.0.LATEST&quot; }
+      ]
+    }
+  ],
+  &quot;namespace&quot;: &quot;opskit&quot;,
+  &quot;sfdcLoginUrl&quot;: &quot;https://login.salesforce.com&quot;,
+  &quot;sourceApiVersion&quot;: &quot;62.0&quot;,
+  &quot;packageAliases&quot;: {
+    &quot;Ops Toolkit Core&quot;: &quot;0Ho...&quot;,
+    &quot;Ops Toolkit Core@1.0.0-1&quot;: &quot;04t...&quot;,
+    &quot;Ops Toolkit Field Ops&quot;: &quot;0Ho...&quot;,
+    &quot;Ops Toolkit Scheduling&quot;: &quot;0Ho...&quot;
+  }
+}</code></pre></div>
+<div class="tablewrap">
+<table>
+<thead><tr><th>Form</th><th>Example</th><th>When to use</th></tr></thead>
+<tbody>
+<tr><td>By package + version</td><td><code>{"package":"Ops Toolkit Core","versionNumber":"1.0.0.LATEST"}</code></td><td>Packages in <b>this</b> project/Dev Hub. <code>LATEST</code> resolves at build time to the newest build of 1.0.0</td></tr>
+<tr><td>By alias with version</td><td><code>{"package":"Ops Toolkit Core@1.0.0-3"}</code></td><td>Pin an exact build &mdash; what you want for a reproducible release</td></tr>
+<tr><td>By subscriber package version id</td><td><code>{"package":"04tXXXXXXXXXXXXXXX"}</code> or <code>{"subscriberPackageVersionId":"04t..."}</code></td><td>Packages you do <b>not</b> own, and <b>1GP</b> packages</td></tr>
+</tbody>
+</table>
+</div>
+<div class="warn"><p><b><code>LATEST</code> vs pinned.</b> <code>LATEST</code> is lovely in development and dangerous
+in a release build: two builds of B from the same commit can resolve to different versions of A, so the
+build is not reproducible. Convention that works: <code>LATEST</code> on feature branches, <b>pinned</b>
+(<code>@1.0.0-3</code> or a <code>04t</code>) on release branches.</p></div>
+
+<h3>Why B depends on A &mdash; mechanically</h3>
+<p><code>ServiceRequestConsoleController</code> (package B) references <code>ServiceRequestService</code>
+(package A). Apex is compiled when the version is built, so <b>the compiler must be able to see A</b>.
+The declaration is what makes that happen.</p>
+
+<h3>What happens during package version create</h3>
+<pre class="diagram">sf package version create --package &quot;Ops Toolkit Field Ops&quot;
+   │
+   ├─ Dev Hub reads sfdx-project.json for this package directory
+   ├─ Resolves each dependency to a concrete 04t
+   │     &quot;1.0.0.LATEST&quot;  →  newest 1.0.0.x build of Core in this Dev Hub
+   ├─ Provisions a temporary BUILD ENVIRONMENT
+   ├─ INSTALLS the dependency package versions into it, in order
+   ├─ Deploys the source under packages/field-ops
+   ├─ Compiles Apex  ← fails here if a dependency is missing or too old
+   ├─ Runs tests (with --code-coverage) and records coverage
+   └─ Mints Package2Version (05i) + SubscriberPackageVersion (04t),
+      recording the resolved dependency list ON the version</pre>
+<p><span class="badge b-inf">Inference</span> The exact provisioning mechanism of the build environment
+is not publicly detailed; that dependencies are installed into a build environment and that Apex is
+compiled there is <span class="badge b-doc">documented behaviour</span> you can observe in the failure
+messages.</p>
+
+<h3>What happens during installation</h3>
+<ol class="steps">
+<li>The subscriber requests install of B's <code>04t</code>.</li>
+<li>Salesforce checks B's recorded dependency list against what is installed in that org.</li>
+<li>If A (at a compatible version) is missing, the install <b>fails</b> with a message naming the required
+package version ID. It does <b>not</b> auto-install it.</li>
+<li>If A is present at that version or newer <span class="badge b-unk">Verify</span> the exact
+compatibility rule for &ldquo;newer than declared&rdquo;, the install proceeds.</li>
+</ol>
+
+<h3>Install order &mdash; and proving it</h3>
+<div class="codewrap"><div class="codebar"><span>bash</span><button class="copy" type="button">Copy</button></div><pre class="code"><code># WRONG order, on purpose. Expect failure.
+sf package install --package 04t...FIELDOPS --target-org customer1 --wait 20 --no-prompt
+
+# RIGHT order
+sf package install --package 04t...CORE     --target-org customer1 --wait 20 --no-prompt
+sf package install --package 04t...FIELDOPS --target-org customer1 --wait 20 --no-prompt
+sf package install --package 04t...SCHED    --target-org customer1 --wait 20 --no-prompt
+
+sf package installed list --target-org customer1</code></pre></div>
+<p>The failure message is your teacher here: it names the exact <code>04t</code> the org is missing. Copy it,
+install that first, retry. <b>Uninstall order is the reverse:</b> you cannot uninstall A while B is
+installed and referencing it.</p>
+
+<h3>When the dependency version changes</h3>
+<div class="tablewrap">
+<table>
+<thead><tr><th>Scenario</th><th>What happens</th><th>What you must do</th></tr></thead>
+<tbody>
+<tr><td>A ships 1.1 (additive), B still declares <code>1.0.0.LATEST</code></td><td>B keeps building against 1.0.0.x. Subscribers can run A 1.1 with B built on 1.0 &mdash; managed packages are backward compatible <b>because</b> global APIs cannot be removed</td><td>Nothing urgent. Bump when B needs A's new API</td></tr>
+<tr><td>B needs a <code>global</code> method added in A 1.1</td><td>Build fails against 1.0</td><td>Change B's dependency to <code>1.1.0.LATEST</code>; now A 1.1 is the <b>minimum</b> for B's new version</td></tr>
+<tr><td>Customer upgrades B but not A</td><td>Install fails if B's new version requires a newer A</td><td>Document upgrade order; upgrade A first, always</td></tr>
+<tr><td>A removes a <code>global</code> method</td><td>Cannot happen &mdash; the platform forbids it</td><td>&mdash;</td></tr>
+<tr><td>Two installed packages need different versions of A</td><td>Only one version of A can exist in an org; it must satisfy the highest requirement</td><td>Keep dependencies at the lowest version that works, upgrade A first</td></tr>
+</tbody>
+</table>
+</div>
+
+<h3>Exercise A</h3>
+<ul class="check">
+<li>Build versions of A, B, C in order and install all three into a clean org</li>
+<li>Deliberately install B first into a fresh org and record the exact error text</li>
+<li>Remove B's <code>dependencies</code> block and watch <code>sf package version create</code> fail at Apex compile</li>
+<li>Pin B to <code>Ops Toolkit Core@1.0.0-1</code> and confirm a rebuild uses that exact version</li>
+<li>Try to uninstall A while B is installed; record the error</li>
+</ul>
+
+<hr>
+
+<h2>Part B &mdash; Package A = 1GP, Package B = 2GP</h2>
+
+<h3>Is it supported?</h3>
+<p><b>Yes &mdash; a 2GP package can depend on a 1GP managed package.</b>
+<span class="badge b-doc">Documented</span> This is the normal situation for an ISV that has a large
+legacy 1GP product and builds new modules as 2GP (exactly Sitetracker's shape: a 1GP core with 2GP
+feature packages beside it).</p>
+<p><b>The reverse is not available:</b> 1GP has <b>no mechanism at all</b> to declare a dependency. A 1GP
+package can only reference a 2GP package's components if that package happens to be installed in the
+packaging org, and nothing will enforce it at the customer's install time.
+<span class="badge b-inf">Inference</span> from the absence of any declaration mechanism in 1GP &mdash;
+treat &ldquo;1GP depends on 2GP&rdquo; as something to design around, not to rely on.</p>
+
+<h3>How the dependency is declared</h3>
+<p>By <b>subscriber package version ID</b>, because a 1GP package has no entry in your Dev Hub's
+<code>Package2</code> table and therefore no alias to name:</p>
+<div class="codewrap"><div class="codebar"><span>json</span><button class="copy" type="button">Copy</button></div><pre class="code"><code>{
+  &quot;path&quot;: &quot;packages/field-ops&quot;,
+  &quot;package&quot;: &quot;Ops Toolkit Field Ops&quot;,
+  &quot;versionNumber&quot;: &quot;1.0.0.NEXT&quot;,
+  &quot;dependencies&quot;: [
+    { &quot;subscriberPackageVersionId&quot;: &quot;04tXXXXXXXXXXXXXXX&quot; }
+  ]
+}</code></pre></div>
+<p>Optionally give it a friendly name via <code>packageAliases</code> so the file reads better:</p>
+<div class="codewrap"><div class="codebar"><span>json</span><button class="copy" type="button">Copy</button></div><pre class="code"><code>&quot;packageAliases&quot;: {
+  &quot;LegacyCore@2.4&quot;: &quot;04tXXXXXXXXXXXXXXX&quot;
+}</code></pre></div>
+<p>then <code>{ "package": "LegacyCore@2.4" }</code>.</p>
+
+<h3>Where the 04t comes from</h3>
+<ul>
+<li><b>Your own 1GP:</b> packaging org &rarr; Package Manager &rarr; your package &rarr; Versions &rarr; the version's
+detail page, or the install URL's <code>p0=</code> parameter, or <code>sf package1 version list</code>.</li>
+<li><b>Someone else's 1GP:</b> from their install URL, or from an org that has it installed:
+<div class="codewrap"><div class="codebar"><span>bash</span><button class="copy" type="button">Copy</button></div><pre class="code"><code>sf package installed list --target-org customer1
+# or via SOQL in the org that has it installed:
+sf data query --target-org customer1 --query &quot;SELECT SubscriberPackage.Name, \
+SubscriberPackageVersion.Id, SubscriberPackageVersion.MajorVersion, \
+SubscriberPackageVersion.MinorVersion FROM InstalledSubscriberPackage&quot; --use-tooling-api</code></pre></div>
+</li>
+</ul>
+
+<h3>How it resolves, and what to watch</h3>
+<ol class="steps">
+<li>At <b>version create</b>, Salesforce installs that exact 1GP <code>04t</code> into the build environment,
+then compiles your 2GP source against it.</li>
+<li>At <b>install</b>, the subscriber org must already have that 1GP package (a compatible version)
+installed &mdash; same rule as any dependency.</li>
+<li>At <b>upgrade</b>, the 1GP dependency upgrades on its own schedule; your 2GP module keeps working
+because the 1GP's <code>global</code> API cannot be removed.</li>
+</ol>
+
+<h3>Limitations and cautions</h3>
+<ul>
+<li>A <b>1GP dependency is pinned to a specific <code>04t</code></b> &mdash; there is no <code>LATEST</code> resolution
+for it, so you must edit <code>sfdx-project.json</code> whenever you want to build against a newer 1GP
+version. That is annoying and also honest: it makes the dependency explicit in your Git history.</li>
+<li>The 1GP version you depend on should be a <b>released</b> version, not a beta &mdash; betas cannot be
+installed in production, so no subscriber could satisfy the dependency.</li>
+<li>If the 1GP package needs an <b>installation key</b>, the build environment must be able to install it.
+<span class="badge b-unk">Verify</span> the current mechanism for supplying dependency installation keys
+during <code>sf package version create</code> before you rely on it.</li>
+<li><b>Namespace:</b> the 2GP package may live in the same namespace as the 1GP (the migration-friendly
+shape) or a different one. <span class="badge b-unk">Verify</span> the current rules and prerequisites
+for sharing a namespace between a released 1GP package and new 2GP packages &mdash; it is supported, and the
+conditions are specific.</li>
+<li>Your 2GP code can only call the 1GP's <b><code>global</code></b> surface. Anything <code>public</code> in the 1GP
+is invisible to you, even in the same namespace <span class="badge b-unk">Verify</span> the same-namespace
+nuance in your own test before designing around it.</li>
+</ul>
+
+<h3>Exercise B</h3>
+<ul class="check">
+<li>Take the 1GP core you released in <a href="06-1gp-lifecycle.html">Part 6</a> and note its released <code>04t</code></li>
+<li>Create a small 2GP package whose Apex calls a <code>global</code> method from it</li>
+<li>Declare the dependency by <code>subscriberPackageVersionId</code> and build a version</li>
+<li>Install into a clean org: 1GP first, then the 2GP. Record the error when you reverse the order</li>
+<li>Write down, in your own words, why the reverse (1GP depending on 2GP) is not a thing</li>
+</ul>
+
+<hr>
+
+<h2>Part C &mdash; Thinking in graphs</h2>
+<pre class="diagram">                 Core Package            ← ROOT: no dependencies, everything needs it
+                      │
+        ┌─────────────┴─────────────┐
+        │                           │
+   Feature A                    Feature B     ← both depend on Core, not on each other
+        │                           │
+        └─────────────┬─────────────┘
+                      │
+                 Enterprise                   ← LEAF: depends on A and B (and transitively Core)
+
+ INSTALL order:   Core → (A, B in any order) → Enterprise      (topological order)
+ UPGRADE order:   same direction — dependencies first, always
+ UNINSTALL order: exact reverse — Enterprise → A/B → Core</pre>
+<div class="tablewrap">
+<table>
+<thead><tr><th>Term</th><th>Meaning</th><th>Practical consequence</th></tr></thead>
+<tbody>
+<tr><td><b>Root package</b></td><td>Depends on nothing</td><td>Changes here are the most expensive &mdash; everything downstream rebuilds. Keep it small and stable</td></tr>
+<tr><td><b>Leaf package</b></td><td>Nothing depends on it</td><td>Cheapest to change; ideal home for volatile UI</td></tr>
+<tr><td><b>Transitive dependency</b></td><td>Enterprise needs Core through A</td><td>Declare direct dependencies; the platform resolves the chain, but you still install the whole chain</td></tr>
+<tr><td><b>Topological order</b></td><td>An order where every dependency comes before its dependents</td><td>This is your documented install sequence</td></tr>
+<tr><td><b>Circular dependency</b></td><td>A needs B and B needs A</td><td><b>Impossible</b> &mdash; neither could ever be built first. If you want one, you have one package, not two. Fix by extracting the shared part into a new root package</td></tr>
+<tr><td><b>Dependency conflict</b></td><td>Two packages require incompatible versions of a third</td><td>Only one version of a package exists per org, so the higher requirement wins; the other package must tolerate it</td></tr>
+<tr><td><b>Version compatibility</b></td><td>Declared version = <i>minimum</i></td><td>Managed packages are backward compatible by construction (no removals), which is what makes this workable</td></tr>
+</tbody>
+</table>
+</div>
+
+<h3>Inspecting the graph with the CLI</h3>
+<div class="codewrap"><div class="codebar"><span>bash</span><button class="copy" type="button">Copy</button></div><pre class="code"><code># What packages exist in my Dev Hub?
+sf package list --target-dev-hub devhub --verbose
+
+# All versions, with released flag and code coverage
+sf package version list --target-dev-hub devhub --verbose
+
+# Everything about ONE version, including its resolved dependencies
+sf package version report --package &quot;Ops Toolkit Field Ops@1.0.0-1&quot; \
+  --target-dev-hub devhub --verbose
+
+# The ancestry tree of a package (which version descends from which)
+sf package version displayancestry --package &quot;Ops Toolkit Core&quot; \
+  --target-dev-hub devhub --verbose
+
+# What is installed in a given org, and at what version
+sf package installed list --target-org customer1
+
+# Raw truth, straight from the Dev Hub objects
+sf data query --target-org devhub --use-tooling-api --query \
+&quot;SELECT Package2Id, SubscriberPackageVersionId, MajorVersion, MinorVersion, PatchVersion, \
+BuildNumber, IsReleased FROM Package2Version ORDER BY CreatedDate DESC LIMIT 20&quot;</code></pre></div>
+<div class="tip"><p><b>Habit worth forming:</b> after every release, run
+<code>sf package version report --verbose</code> on the version you promoted and paste the dependency list
+into your release notes. Six months later, when a customer's upgrade fails, that list is the first thing
+you will want.</p></div>
+
+<h3>Design rules that keep graphs sane</h3>
+<ol>
+<li><b>One root, shallow tree.</b> Depth costs install steps and upgrade coordination.</li>
+<li><b>Depend downward only.</b> Never let a stable package reach into a volatile one.</li>
+<li><b>Extract, don't cross-link.</b> The fix for a would-be circular dependency is always a new shared
+root package.</li>
+<li><b>Pin dependencies on release branches</b>, float them on feature branches.</li>
+<li><b>Document the install order in the listing itself</b> &mdash; customers do not read your wiki.</li>
+</ol>
+
+  <nav class="pager"><a class="prev" href="10-compare.html"><span>Previous</span>10 &middot; 1GP vs 2GP</a><a class="next" href="12-install.html"><span>Next</span>12 &middot; Install &amp; upgrade</a></nav>
+  <footer class="sitefoot">
+    <p>Built as a personal learning course. Salesforce behaviour changes between releases &mdash;
+    always confirm against <a href="https://developer.salesforce.com/docs/atlas.en-us.sfdx_dev.meta/sfdx_dev/">Salesforce DX Developer Guide</a>
+    and the <a href="https://developer.salesforce.com/docs/atlas.en-us.packagingGuide.meta/packagingGuide/">ISVforce / Packaging guides</a>
+    before you rely on a detail in production.</p>
+  </footer>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

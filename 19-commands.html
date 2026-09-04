@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Every Command You Need &middot; AppExchange From Zero</title>
+<link rel="stylesheet" href="assets/site.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<button class="navtoggle" aria-label="Toggle navigation">&#9776; Contents</button>
+<div class="shell">
+<nav class="sidenav" id="sidenav">
+  <div class="brand">
+    <span class="brand-mark">SF</span>
+    <span class="brand-text">AppExchange<br><b>From Zero</b></span>
+  </div>
+  <ol class="navlist">
+    <li><a href="index.html">Start here</a></li>
+    <li><a href="01-big-picture.html">1 &middot; Big picture</a></li>
+    <li><a href="02-orgs.html">2 &middot; Org architecture</a></li>
+    <li><a href="03-prereqs.html">3 &middot; Prerequisites</a></li>
+    <li><a href="04-the-app.html">4 &middot; The app</a></li>
+    <li><a href="05-1gp.html">5 &middot; 1GP concepts</a></li>
+    <li><a href="06-1gp-lifecycle.html">6 &middot; 1GP lifecycle</a></li>
+    <li><a href="07-2gp.html">7 &middot; 2GP concepts</a></li>
+    <li><a href="08-2gp-build.html">8 &middot; 2GP build</a></li>
+    <li><a href="09-scratch-orgs.html">9 &middot; Scratch orgs</a></li>
+    <li><a href="10-compare.html">10 &middot; 1GP vs 2GP</a></li>
+    <li><a href="11-dependencies.html">11 &middot; Dependencies</a></li>
+    <li><a href="12-install.html">12 &middot; Install &amp; upgrade</a></li>
+    <li><a href="13-security.html">13 &middot; Security Review</a></li>
+    <li><a href="14-cicd.html">14 &middot; CI/CD</a></li>
+    <li><a href="15-appexchange.html">15 &middot; AppExchange</a></li>
+    <li><a href="16-day-plan.html">16 &middot; Day-by-day plan</a></li>
+    <li><a href="17-debugging.html">17 &middot; Debug drills</a></li>
+    <li><a href="17b-error-index.html">17b &middot; Error index</a></li>
+    <li><a href="18-backend.html">18 &middot; Behind the scenes</a></li>
+    <li class="here"><a href="19-commands.html">19 &middot; Command cheat sheet</a></li>
+    <li><a href="20-quiz.html">20 &middot; Knowledge test</a></li>
+  </ol>
+  <div class="navfoot">
+    <p>Local course site.<br>Regenerate with <code>python3 build.py</code></p>
+  </div>
+</nav>
+<main id="main">
+  <header class="pagehead">
+    <p class="kicker">Part 19</p>
+    <h1>Every Command You Need</h1>
+  </header>
+  <p class="lead">Every command you need, grouped by job. Format: <b>command &rarr; purpose &rarr; which org &rarr;
+what you get back</b>. Written for <code>sf</code> CLI v2 &mdash; run <code>sf &lt;topic&gt; --help</code> if a flag
+differs in your version.</p>
+
+<div class="note"><p><b>Flag shorthands used throughout:</b> <code>-o</code> = <code>--target-org</code>,
+<code>-v</code> = <code>--target-dev-hub</code>, <code>-a</code> = <code>--alias</code>,
+<code>-p</code> = <code>--package</code>, <code>-d</code> = <code>--duration-days</code> (scratch orgs) or
+<code>--source-dir</code> (deploy &mdash; yes, that is confusing; prefer long flags in scripts).</p></div>
+
+<h2>Authentication</h2>
+<div class="tablewrap">
+<table>
+<thead><tr><th>Command</th><th>Purpose</th><th>Org</th><th>Result</th></tr></thead>
+<tbody>
+<tr><td><code>sf org login web --alias devhub --set-default-dev-hub</code></td><td>Interactive login, marked as default Dev Hub</td><td>Dev Hub</td><td>Refresh token stored locally</td></tr>
+<tr><td><code>sf org login web --alias pkgorg</code></td><td>Interactive login</td><td>Any</td><td>Alias usable in later commands</td></tr>
+<tr><td><code>sf org login device</code></td><td>Login without a local browser redirect</td><td>Any</td><td>A code you enter in a browser</td></tr>
+<tr><td><code>sf org login jwt --client-id ID --jwt-key-file server.key --username U</code></td><td>Headless auth for CI</td><td>Any</td><td>No interaction; needs a Connected App with a certificate</td></tr>
+<tr><td><code>sf org logout --target-org X</code></td><td>Remove local auth</td><td>Local only</td><td>Alias gone; the org still exists</td></tr>
+<tr><td><code>sf org display --target-org X --verbose</code></td><td>Show instance URL, username, access token</td><td>X</td><td><b>Treat the token as a password</b></td></tr>
+</tbody>
+</table>
+</div>
+
+<h2>Org listing and inspection</h2>
+<div class="tablewrap">
+<table>
+<tbody>
+<tr><td><code>sf org list --all</code></td><td>Every known org incl. expired scratch orgs</td><td>Local</td><td>Aliases, defaults, connection status</td></tr>
+<tr><td><code>sf org open --target-org X</code></td><td>Open the org in a browser, already logged in</td><td>X</td><td>Browser session</td></tr>
+<tr><td><code>sf org open --target-org X --path lightning/setup/ImportedPackage/home</code></td><td>Jump straight to Installed Packages</td><td>X</td><td>&mdash;</td></tr>
+<tr><td><code>sf org list limits --target-org X</code></td><td>API calls, storage, <b>scratch org allowances</b></td><td>X</td><td>Why your CI failed at 3pm</td></tr>
+<tr><td><code>sf org list metadata-types --target-org X</code></td><td>What metadata this org supports</td><td>X</td><td>Useful when a type will not deploy</td></tr>
+</tbody>
+</table>
+</div>
+
+<h2>Scratch orgs</h2>
+<div class="tablewrap">
+<table>
+<tbody>
+<tr><td><code>sf org create scratch -f config/project-scratch-def.json -a dev1 -d 7 --set-default</code></td><td>Namespaced dev org</td><td>Dev Hub &rarr; new org</td><td>New org + alias; a <code>ScratchOrgInfo</code> row</td></tr>
+<tr><td><code>sf org create scratch -f config/customer-like-scratch-def.json -a customer1 -d 2 --no-namespace</code></td><td><b>Customer-like</b> install-test org</td><td>Dev Hub</td><td>Non-namespaced org</td></tr>
+<tr><td><code>sf org delete scratch --target-org dev1 --no-prompt</code></td><td>Free the slot immediately</td><td>Dev Hub</td><td>Org destroyed</td></tr>
+<tr><td><code>sf org resume scratch --job-id 2SR...</code></td><td>Reattach to a creation that timed out</td><td>Dev Hub</td><td>&mdash;</td></tr>
+<tr><td><code>sf org generate password --target-org dev1</code></td><td>Set a password so you can log in manually</td><td>Scratch org</td><td>Username + password</td></tr>
+<tr><td><code>sf org assign permset --name Ops_Core_User --target-org dev1</code></td><td>Assign a permission set to yourself</td><td>Target org</td><td>Assignment created</td></tr>
+</tbody>
+</table>
+</div>
+
+<h2>Project, deploy, retrieve</h2>
+<div class="tablewrap">
+<table>
+<tbody>
+<tr><td><code>sf project generate --name my-app --template standard</code></td><td>New DX project</td><td>Local</td><td>Folder + <code>sfdx-project.json</code></td></tr>
+<tr><td><code>sf project deploy start --target-org dev1</code></td><td>Deploy source (delta in tracked orgs)</td><td>Target</td><td>Components created; Apex compiled</td></tr>
+<tr><td><code>sf project deploy start --source-dir packages/core --target-org pkgorg</code></td><td>Deploy one directory</td><td>Target</td><td>&mdash;</td></tr>
+<tr><td><code>sf project deploy start --dry-run --target-org X</code></td><td>Validate without saving</td><td>Target</td><td>Errors, no changes</td></tr>
+<tr><td><code>sf project deploy preview --target-org dev1</code></td><td>What would deploy / conflict</td><td>Target</td><td>A diff list</td></tr>
+<tr><td><code>sf project retrieve start --metadata Flow:Ops_Set_Due_Date --target-org dev1</code></td><td>Pull something built in the UI</td><td>Target</td><td>Files written locally</td></tr>
+<tr><td><code>sf project retrieve start --manifest package.xml --target-org pkgorg</code></td><td>Bulk retrieve (1GP drift checks)</td><td>Target</td><td>Files written locally</td></tr>
+<tr><td><code>sf project reset tracking --target-org dev1</code></td><td>Fix confused source tracking</td><td>Target</td><td>Tracking state cleared</td></tr>
+</tbody>
+</table>
+</div>
+
+<h2>Apex, data, debugging</h2>
+<div class="tablewrap">
+<table>
+<tbody>
+<tr><td><code>sf apex run --file scripts/apex/seed-data.apex --target-org dev1</code></td><td>Run anonymous Apex</td><td>Target</td><td>Execution result + debug log</td></tr>
+<tr><td><code>sf apex run test --target-org dev1 --code-coverage --result-format human --wait 10</code></td><td>Run all local tests</td><td>Target</td><td>Pass/fail + coverage</td></tr>
+<tr><td><code>sf apex run test --tests ServiceRequestServiceTest --target-org dev1</code></td><td>One test class</td><td>Target</td><td>Faster loop</td></tr>
+<tr><td><code>sf apex get log --target-org dev1</code></td><td>Fetch the latest debug log</td><td>Target</td><td>Log text</td></tr>
+<tr><td><code>sf apex tail log --target-org dev1</code></td><td>Stream logs live</td><td>Target</td><td>Live output</td></tr>
+<tr><td><code>sf data query --target-org X --query "SELECT ..."</code></td><td>SOQL</td><td>Target</td><td>Rows</td></tr>
+<tr><td><code>sf data query --use-tooling-api --query "..."</code></td><td>Tooling objects (packaging, ScratchOrgInfo)</td><td>Target</td><td>Rows the standard API cannot see</td></tr>
+</tbody>
+</table>
+</div>
+
+<h2>2GP packaging</h2>
+<div class="tablewrap">
+<table>
+<tbody>
+<tr><td><code>sf package create --name "X" --package-type Managed --path packages/core -v devhub</code></td><td><b>Once per package.</b> Register the package</td><td>Dev Hub</td><td><code>0Ho</code> ID + alias written to <code>sfdx-project.json</code></td></tr>
+<tr><td><code>sf package list -v devhub --verbose</code></td><td>All packages in this Dev Hub</td><td>Dev Hub</td><td>IDs, namespace, type</td></tr>
+<tr><td><code>sf package update --package "X" --description "..." -v devhub</code></td><td>Edit package metadata</td><td>Dev Hub</td><td>&mdash;</td></tr>
+<tr><td><code>sf package version create -p "X" --installation-key KEY --code-coverage --wait 30 -v devhub</code></td><td><b>Build a version</b></td><td>Dev Hub &rarr; build env</td><td><code>08c</code> &rarr; <code>04t</code> + alias</td></tr>
+<tr><td><code>sf package version create --skip-validation ...</code></td><td>Faster build, skips validation</td><td>Dev Hub</td><td><b>Cannot be promoted</b> in some cases &mdash; <span class="badge b-unk">Verify</span> before using</td></tr>
+<tr><td><code>sf package version create list -v devhub</code></td><td>Recent build attempts + status</td><td>Dev Hub</td><td>Where failures live</td></tr>
+<tr><td><code>sf package version create report --package-create-request-id 08c... -v devhub</code></td><td><b>Why a build failed</b></td><td>Dev Hub</td><td>Full error</td></tr>
+<tr><td><code>sf package version list -v devhub --verbose</code></td><td>All versions</td><td>Dev Hub</td><td>Version numbers, released flag, coverage, <code>04t</code></td></tr>
+<tr><td><code>sf package version list --released -v devhub</code></td><td>Only released versions</td><td>Dev Hub</td><td>What customers can install</td></tr>
+<tr><td><code>sf package version report -p "X@1.0.0-1" -v devhub --verbose</code></td><td>Everything about one version</td><td>Dev Hub</td><td>Includes resolved dependencies</td></tr>
+<tr><td><code>sf package version promote -p "X@1.0.0-1" -v devhub</code></td><td><b>Release it.</b> Irreversible</td><td>Dev Hub</td><td><code>IsReleased = true</code></td></tr>
+<tr><td><code>sf package version displayancestry -p "X" -v devhub --verbose</code></td><td>The lineage tree</td><td>Dev Hub</td><td>ASCII tree of versions</td></tr>
+<tr><td><code>sf package version delete -p "X@1.0.0-1" -v devhub</code></td><td>Delete an <b>unreleased</b> version</td><td>Dev Hub</td><td>Released versions can never be deleted</td></tr>
+</tbody>
+</table>
+</div>
+
+<h2>1GP packaging</h2>
+<div class="tablewrap">
+<table>
+<tbody>
+<tr><td>Setup &rarr; Package Manager &rarr; Packages &rarr; New</td><td><b>Create the package</b> (no CLI equivalent)</td><td>Packaging org</td><td><code>033</code> package</td></tr>
+<tr><td>Package detail &rarr; Add Components</td><td>Define contents</td><td>Packaging org</td><td>Component list</td></tr>
+<tr><td><code>sf package1 version create --package-id 033... --name "1.0" --version "1.0" --wait 20 -o pkgorg</code></td><td>Upload a beta</td><td>Packaging org</td><td><code>04t</code></td></tr>
+<tr><td><code>sf package1 version create --managed-released ...</code></td><td>Upload a released version</td><td>Packaging org</td><td>Permanent <code>04t</code>; enforces 75% coverage</td></tr>
+<tr><td><code>sf package1 version create get --request-id 0HD... -o pkgorg</code></td><td>Status of an upload</td><td>Packaging org</td><td>Progress / errors</td></tr>
+<tr><td><code>sf package1 version list --package-id 033... -o pkgorg</code></td><td>All versions of a 1GP package</td><td>Packaging org</td><td>Version numbers + <code>04t</code></td></tr>
+<tr><td><code>sf package1 version display --package-version-id 04t... -o pkgorg</code></td><td>One version's details</td><td>Packaging org</td><td>&mdash;</td></tr>
+</tbody>
+</table>
+</div>
+
+<h2>Installation</h2>
+<div class="tablewrap">
+<table>
+<tbody>
+<tr><td><code>sf package install -p 04t... -o customer1 --wait 20 --publish-wait 20 --no-prompt</code></td><td>Install a version</td><td>Target org</td><td><code>PackageInstallRequest</code> &rarr; components</td></tr>
+<tr><td><code>sf package install -p 04t... --installation-key KEY ...</code></td><td>Install a key-protected version</td><td>Target org</td><td>&mdash;</td></tr>
+<tr><td><code>sf package install -p 04t... --security-type AllUsers ...</code></td><td>Grant to all users at install</td><td>Target org</td><td>Still prefer permission sets</td></tr>
+<tr><td><code>sf package install report --request-id 0Hf... -o customer1</code></td><td>Status of an install</td><td>Target org</td><td>Progress / failure reason</td></tr>
+<tr><td><code>sf package installed list -o customer1</code></td><td><b>What is installed here</b></td><td>Target org</td><td>Package names, versions, <code>04t</code>s</td></tr>
+<tr><td><code>sf package uninstall -p 04t... -o customer1 --wait 20</code></td><td>Uninstall</td><td>Target org</td><td>Fails if something depends on it</td></tr>
+<tr><td>URL: <code>https://login.salesforce.com/packaging/installPackage.apexp?p0=04t...</code></td><td>Manual install (production)</td><td>Any org</td><td>Use <code>test.salesforce.com</code> for sandboxes</td></tr>
+</tbody>
+</table>
+</div>
+
+<h2>Git</h2>
+<div class="tablewrap">
+<table>
+<tbody>
+<tr><td><code>git checkout -b feature/SIT-123-console-filter</code></td><td>Start work</td><td>&mdash;</td><td>Branch</td></tr>
+<tr><td><code>git add -A &amp;&amp; git commit -m "feat: ..."</code></td><td>Commit &mdash; <b>including <code>sfdx-project.json</code></b></td><td>&mdash;</td><td>Aliases preserved</td></tr>
+<tr><td><code>git tag -a core-v1.1.0 -m "Ops Toolkit Core 1.1.0 (04t...)"</code></td><td>Mark a released version</td><td>&mdash;</td><td>The commit that became that version</td></tr>
+<tr><td><code>git push --follow-tags</code></td><td>Publish branch + tags</td><td>&mdash;</td><td>&mdash;</td></tr>
+<tr><td><code>git diff core-v1.0.0..core-v1.1.0 -- packages/core</code></td><td><b>&ldquo;What is in this release?&rdquo;</b></td><td>&mdash;</td><td>The answer 1GP cannot give you</td></tr>
+</tbody>
+</table>
+</div>
+
+<h2>The ten commands you will actually type every day</h2>
+<div class="codewrap"><div class="codebar"><span>bash</span><button class="copy" type="button">Copy</button></div><pre class="code"><code>sf org list --all
+sf org create scratch -f config/project-scratch-def.json -a dev1 -d 7 --set-default
+sf project deploy start --target-org dev1
+sf apex run test --target-org dev1 --code-coverage --result-format human
+sf org open --target-org dev1
+sf package version create -p &quot;Ops Toolkit Core&quot; --code-coverage --wait 30
+sf package version create report --package-create-request-id 08c...
+sf package install -p 04t... -o customer1 --wait 20 --publish-wait 20 --no-prompt
+sf package installed list -o customer1
+sf package version promote -p &quot;Ops Toolkit Core@1.1.0-1&quot;</code></pre></div>
+
+  <nav class="pager"><a class="prev" href="18-backend.html"><span>Previous</span>18 &middot; Behind the scenes</a><a class="next" href="20-quiz.html"><span>Next</span>20 &middot; Knowledge test</a></nav>
+  <footer class="sitefoot">
+    <p>Built as a personal learning course. Salesforce behaviour changes between releases &mdash;
+    always confirm against <a href="https://developer.salesforce.com/docs/atlas.en-us.sfdx_dev.meta/sfdx_dev/">Salesforce DX Developer Guide</a>
+    and the <a href="https://developer.salesforce.com/docs/atlas.en-us.packagingGuide.meta/packagingGuide/">ISVforce / Packaging guides</a>
+    before you rely on a detail in production.</p>
+  </footer>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

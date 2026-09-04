@@ -1,0 +1,222 @@
+<p class="lead">Security Review is the gate between &ldquo;my package works&rdquo; and &ldquo;my package is on
+AppExchange&rdquo;. It is a real review by real people plus automated scanning, and first-time submissions
+frequently fail. This page makes you write the vulnerabilities, find them, and fix them.</p>
+
+<div class="note"><p><span class="badge b-unk">Verify</span> Submission mechanics, required artefacts,
+scan tooling versions, fees and turnaround times change regularly. Everything <b>process</b>-related here
+must be confirmed against the current <b>ISVforce Guide</b> and the <b>Security Review</b> pages in the
+Partner Community. The <b>technical</b> requirements below are stable.</p></div>
+
+<h2>What Security Review actually is</h2>
+<ul>
+<li><b>Automated scanning</b> of your package's source (Salesforce Code Analyzer / PMD / Graph Engine and
+internal tooling), plus scanning of any external web app your package talks to.</li>
+<li><b>Human review</b> of the findings, your architecture, how you store secrets, and your
+documentation.</li>
+<li>You submit through the <b>Partner Console (Publishing Console)</b>, attached to a specific released
+package version.</li>
+<li>Failure comes back as a findings report. You fix, produce a new version, and resubmit &mdash; which is why
+you want to be clean <i>before</i> the first submission, not after.</li>
+</ul>
+
+<h2>The technical requirements, one by one</h2>
+
+<h3>1. CRUD and FLS enforcement</h3>
+<p><b>The rule:</b> your code must not read or write data the running user is not allowed to read or
+write &mdash; even though your packaged Apex runs in system mode by default.</p>
+[[code apex]]
+// BAD - system mode, no enforcement. Any user with access to your LWC reads everything.
+public with sharing class Bad {
+    @AuraEnabled(cacheable=true)
+    public static List<Service_Request__c> all() {
+        return [SELECT Id, Summary__c, Priority__c FROM Service_Request__c];
+    }
+}
+
+// GOOD - the platform enforces object + field permissions for you.
+public with sharing class Good {
+    @AuraEnabled(cacheable=true)
+    public static List<Service_Request__c> all() {
+        return [SELECT Id, Summary__c, Priority__c FROM Service_Request__c WITH USER_MODE LIMIT 200];
+    }
+}
+[[/code]]
+<div class="tablewrap">
+<table>
+<thead><tr><th>Mechanism</th><th>Use for</th></tr></thead>
+<tbody>
+<tr><td><code>WITH USER_MODE</code> on static SOQL</td><td>The modern default. Enforces CRUD + FLS + (with sharing) sharing</td></tr>
+<tr><td><code>Database.query(soql, AccessLevel.USER_MODE)</code></td><td>Dynamic SOQL</td></tr>
+<tr><td><code>Database.insert(records, true, AccessLevel.USER_MODE)</code></td><td>DML</td></tr>
+<tr><td><code>Security.stripInaccessible(AccessType.READABLE, records)</code></td><td>Sanitising records before returning them, especially when you must query in system mode for a legitimate reason</td></tr>
+<tr><td><code>Schema.SObjectType.X.isAccessible()/isCreateable()/isUpdateable()/isDeletable()</code></td><td>Explicit gate checks before an operation, for clear error messages</td></tr>
+</tbody>
+</table>
+</div>
+<div class="tip"><p>If you genuinely need system mode (e.g. writing an audit record the user cannot see),
+that is allowed &mdash; but <b>document why</b>, keep the surface tiny, and expect the reviewer to ask.</p></div>
+
+<h3>2. Sharing</h3>
+<ul>
+<li>Every class declares <code>with sharing</code>, <code>without sharing</code>, or <code>inherited sharing</code> &mdash;
+never leaves it unspecified.</li>
+<li>Default to <code>with sharing</code>. <code>without sharing</code> needs a written justification.</li>
+<li>Utility classes called from both contexts should be <code>inherited sharing</code>.</li>
+<li>Remember: sharing keywords do <b>not</b> enforce FLS or CRUD. They are about <i>records</i>, not fields.</li>
+</ul>
+
+<h3>3. SOQL / SOSL injection</h3>
+[[code apex]]
+// BAD - user input concatenated into a query.
+String soql = 'SELECT Id FROM Service_Request__c WHERE Summary__c = \'' + userInput + '\'';
+
+// GOOD - bind variable. Nothing to inject into.
+List<Service_Request__c> rows = [SELECT Id FROM Service_Request__c
+                                 WHERE Summary__c = :userInput WITH USER_MODE];
+
+// When the STRUCTURE must be dynamic (field names, ORDER BY), use an allow-list.
+// String.escapeSingleQuotes() protects VALUES only - it does nothing for a field name.
+private static final Set<String> SORTABLE = new Set<String>{'Name','Status__c','Due_Date__c'};
+String field = SORTABLE.contains(input) ? input : 'Due_Date__c';
+[[/code]]
+
+<h3>4. XSS and the front end</h3>
+<ul>
+<li>LWC escapes bound values by default. The danger is opting out.</li>
+<li>Never build DOM from strings: no <code>innerHTML</code>, no <code>document.write</code>, no
+<code>eval</code>, and treat <code>lwc:dom="manual"</code> as a red flag needing justification.</li>
+<li>In Visualforce: <code>escape="false"</code>, <code>JSENCODE</code>/<code>HTMLENCODE</code> misuse, and
+unescaped merge fields are classic findings.</li>
+<li>Keep <b>Lightning Locker / Lightning Web Security</b> enabled; do not design around it.</li>
+<li>Third-party JS must be justified, current, and free of known CVEs. Vendored copies get scanned.</li>
+</ul>
+
+<h3>5. Callouts, endpoints and secrets</h3>
+<ul>
+<li><b>Named Credentials</b> for every callout. No hard-coded endpoints, no credentials in code, custom
+settings, or CMDT.</li>
+<li>Remote Site Settings alone are not enough where a Named Credential is possible.</li>
+<li>Secrets never in: Apex source, static resources, debug logs, custom labels, or a Git repo you submit.</li>
+<li>If you must store a secret, use <b>Protected Custom Metadata / Protected Custom Settings</b> in a
+managed package, and explain the model to the reviewer. <span class="badge b-unk">Verify</span> the
+currently recommended pattern for ISV secret storage before designing it.</li>
+<li>Always TLS. Validate certificates. No disabling of security features &ldquo;for now&rdquo;.</li>
+</ul>
+
+<h3>6. Authentication and authorisation</h3>
+<ul>
+<li>Do not implement your own session handling in Visualforce/Apex.</li>
+<li>Guest/Experience Cloud access is scrutinised heavily &mdash; assume anything a guest user can reach is
+public to the internet.</li>
+<li><code>@AuraEnabled</code> methods are <b>a public API surface</b> for anyone in the org: check permissions
+inside them, never rely on the UI hiding a button.</li>
+</ul>
+
+<h3>7. Test coverage and code quality</h3>
+<ul>
+<li>≥75% Apex coverage is a hard <b>packaging</b> gate; reviewers also look for <i>meaningful</i> tests
+(assertions, negative cases, permission tests via <code>System.runAs</code>).</li>
+<li><code>@isTest(SeeAllData=true)</code> is a smell. Create your own data.</li>
+<li>No <code>System.debug</code> of sensitive values.</li>
+</ul>
+
+<h2>Scan the app yourself</h2>
+[[code bash]]
+# Install the scanner
+sf plugins install code-analyzer
+
+# Scan the whole project
+sf code-analyzer run --workspace ./packages --view detail
+
+# Only the high-severity findings, written to a file you can work through
+sf code-analyzer run --workspace ./packages --severity-threshold 2 \
+  --output-file security-findings.html
+[[/code]]
+<div class="warn"><p><span class="badge b-unk">Verify</span> Code Analyzer's command names and flags
+differ between v4 and v5 (<code>sf scanner run</code> vs <code>sf code-analyzer run</code>). Run
+<code>sf code-analyzer --help</code> and use what your installed version supports. Also: a clean local scan
+does <b>not</b> guarantee a clean Security Review &mdash; Salesforce runs additional internal tooling.</p></div>
+
+<h2>Exercise: break it, find it, fix it</h2>
+<p>Add this class to <code>packages/core</code>, scan, then fix every finding and re-scan.</p>
+[[code apex]]
+// packages/core/main/default/classes/VulnerableDemo.cls
+// DELIBERATELY INSECURE. Delete before you ever create a package version.
+public class VulnerableDemo {                       // 1. no sharing declaration
+
+    @AuraEnabled
+    public static List<Service_Request__c> search(String term, String sortBy) {
+        String soql = 'SELECT Id, Summary__c, Priority__c FROM Service_Request__c ' +
+                      'WHERE Summary__c LIKE \'%' + term + '%\' ' +   // 2. SOQL injection
+                      'ORDER BY ' + sortBy;                            // 3. injection via ORDER BY
+        return Database.query(soql);                                   // 4. system mode, no FLS
+    }
+
+    @AuraEnabled
+    public static void wipe(String recordId) {
+        delete [SELECT Id FROM Service_Request__c WHERE Id = :recordId];  // 5. no CRUD check
+    }
+
+    @AuraEnabled
+    public static String callVendor(String path) {
+        HttpRequest req = new HttpRequest();
+        req.setEndpoint('https://api.vendor.example.com/' + path);     // 6. hard-coded endpoint
+        req.setHeader('Authorization', 'Bearer sk_live_9f3a2b1c');     // 7. secret in source
+        req.setMethod('GET');
+        System.debug('token used: sk_live_9f3a2b1c');                  // 8. secret in logs
+        return new Http().send(req).getBody();
+    }
+}
+[[/code]]
+<details>
+<summary>The eight findings and their fixes (try first, then open)</summary>
+<ol>
+<li><b>No sharing declaration</b> &rarr; <code>public with sharing class VulnerableDemo</code>.</li>
+<li><b>SOQL injection via <code>term</code></b> &rarr; use a bind variable:
+<code>WHERE Summary__c LIKE :searchPattern</code> with <code>String searchPattern = '%' + term + '%';</code></li>
+<li><b>Injection via <code>sortBy</code></b> &rarr; allow-list of sortable fields; escaping does not help here.</li>
+<li><b>System-mode query</b> &rarr; <code>Database.query(soql, AccessLevel.USER_MODE)</code> or static SOQL
+with <code>WITH USER_MODE</code>.</li>
+<li><b>Delete without permission check</b> &rarr; <code>Database.delete(records, true, AccessLevel.USER_MODE)</code>,
+and check <code>isDeletable()</code> for a clean error message.</li>
+<li><b>Hard-coded endpoint</b> &rarr; Named Credential: <code>req.setEndpoint('callout:Ops_Vendor_API/' + path)</code>,
+and validate/whitelist <code>path</code>.</li>
+<li><b>Secret in source</b> &rarr; the Named Credential holds the credential; nothing in Apex.</li>
+<li><b>Secret in debug log</b> &rarr; delete the line. Never log tokens, even truncated.</li>
+</ol>
+</details>
+[[code bash]]
+# Prove it
+sf code-analyzer run --workspace ./packages --view detail
+rm packages/core/main/default/classes/VulnerableDemo.cls*    # do not ship the exercise
+[[/code]]
+
+<h2>Security Review readiness checklist</h2>
+<h4>Code</h4>
+<ul class="check">
+<li>Every Apex class declares a sharing model; <code>without sharing</code> is justified in writing</li>
+<li>Every SOQL/SOSL enforces user mode, or is explicitly justified</li>
+<li>Every DML enforces user mode, or is explicitly justified</li>
+<li>No string-concatenated queries with user input; dynamic structure uses allow-lists</li>
+<li>Every <code>@AuraEnabled</code> method checks access itself</li>
+<li>No secrets in source, labels, static resources, CMDT, or logs</li>
+<li>All callouts go through Named Credentials over TLS</li>
+<li>No <code>eval</code>, <code>innerHTML</code>, <code>escape="false"</code>, or disabled Locker/LWS</li>
+<li>Third-party libraries are current, licensed, and CVE-free</li>
+<li>No <code>SeeAllData=true</code>; tests assert behaviour, including negative and permission cases</li>
+<li>≥75% coverage overall, with no class at 0%</li>
+</ul>
+<h4>Package &amp; documentation</h4>
+<ul class="check">
+<li>Permission sets grant exactly what is needed &mdash; no over-granting, no <code>Modify All Data</code></li>
+<li>The package installs and runs for a non-admin user with only your permission sets</li>
+<li>A test/review org is prepared with sample data and credentials for the reviewer</li>
+<li>Architecture/data-flow document: what data leaves Salesforce, where it goes, why</li>
+<li>External services documented, including their own security posture</li>
+<li>A local Code Analyzer scan is clean or every remaining finding has a written explanation</li>
+<li>The <b>released</b> version you intend to submit is the one you tested</li>
+</ul>
+
+<div class="stop"><p><b>Realistic expectation:</b> a first submission that has never been scanned locally
+almost always comes back with findings. A submission that passes this checklist usually comes back with
+questions rather than failures. Budget weeks, not days.</p></div>

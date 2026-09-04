@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Build &amp; Release the 1GP &middot; AppExchange From Zero</title>
+<link rel="stylesheet" href="assets/site.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<button class="navtoggle" aria-label="Toggle navigation">&#9776; Contents</button>
+<div class="shell">
+<nav class="sidenav" id="sidenav">
+  <div class="brand">
+    <span class="brand-mark">SF</span>
+    <span class="brand-text">AppExchange<br><b>From Zero</b></span>
+  </div>
+  <ol class="navlist">
+    <li><a href="index.html">Start here</a></li>
+    <li><a href="01-big-picture.html">1 &middot; Big picture</a></li>
+    <li><a href="02-orgs.html">2 &middot; Org architecture</a></li>
+    <li><a href="03-prereqs.html">3 &middot; Prerequisites</a></li>
+    <li><a href="04-the-app.html">4 &middot; The app</a></li>
+    <li><a href="05-1gp.html">5 &middot; 1GP concepts</a></li>
+    <li class="here"><a href="06-1gp-lifecycle.html">6 &middot; 1GP lifecycle</a></li>
+    <li><a href="07-2gp.html">7 &middot; 2GP concepts</a></li>
+    <li><a href="08-2gp-build.html">8 &middot; 2GP build</a></li>
+    <li><a href="09-scratch-orgs.html">9 &middot; Scratch orgs</a></li>
+    <li><a href="10-compare.html">10 &middot; 1GP vs 2GP</a></li>
+    <li><a href="11-dependencies.html">11 &middot; Dependencies</a></li>
+    <li><a href="12-install.html">12 &middot; Install &amp; upgrade</a></li>
+    <li><a href="13-security.html">13 &middot; Security Review</a></li>
+    <li><a href="14-cicd.html">14 &middot; CI/CD</a></li>
+    <li><a href="15-appexchange.html">15 &middot; AppExchange</a></li>
+    <li><a href="16-day-plan.html">16 &middot; Day-by-day plan</a></li>
+    <li><a href="17-debugging.html">17 &middot; Debug drills</a></li>
+    <li><a href="17b-error-index.html">17b &middot; Error index</a></li>
+    <li><a href="18-backend.html">18 &middot; Behind the scenes</a></li>
+    <li><a href="19-commands.html">19 &middot; Command cheat sheet</a></li>
+    <li><a href="20-quiz.html">20 &middot; Knowledge test</a></li>
+  </ol>
+  <div class="navfoot">
+    <p>Local course site.<br>Regenerate with <code>python3 build.py</code></p>
+  </div>
+</nav>
+<main id="main">
+  <header class="pagehead">
+    <p class="kicker">Part 6</p>
+    <h1>Build &amp; Release the 1GP</h1>
+  </header>
+  <p class="lead">Now do it. Every step below states: what <b>you</b> do, what <b>Salesforce</b> does, which
+<b>org</b> is involved, what <b>artifact</b> appears, and how you <b>verify</b> it. Work top to bottom in one
+sitting if you can &mdash; the whole loop takes about two hours the first time.</p>
+
+<pre class="diagram"> 1 project ─► 2 auth ─► 3 packaging org ─► 4 namespace ─► 5 package ─► 6 add metadata
+                                                                            │
+ 12 upgrade ◄─ 11 install released ◄─ 10 release ◄─ 9 new version ◄─ 8 fix ◄┘ 7 beta + install + test</pre>
+
+<h2>Step 1 &mdash; Project</h2>
+<p><b>You:</b></p>
+<div class="codewrap"><div class="codebar"><span>bash</span><button class="copy" type="button">Copy</button></div><pre class="code"><code>cd sample-project/1gp
+cat sfdx-project.json        # note: NO &quot;namespace&quot; key, NO package definitions</code></pre></div>
+<p><b>Salesforce:</b> nothing yet &mdash; this is purely local.
+<b>Why no namespace key:</b> in 1GP the packaging org applies the namespace on deploy. If you put
+<code>"namespace": "opskit"</code> here, the CLI would expect your local source to already be namespaced and
+you would get confusing mismatches.
+<b>Verify:</b> <code>ls force-app/main/default</code> shows classes, objects, labels, permissionsets, tabs.</p>
+
+<h2>Step 2 &mdash; Authenticate</h2>
+<div class="codewrap"><div class="codebar"><span>bash</span><button class="copy" type="button">Copy</button></div><pre class="code"><code>sf org login web --alias pkgorg
+sf org display --target-org pkgorg</code></pre></div>
+<p><b>Salesforce:</b> OAuth web flow; the org issues a refresh token that the CLI stores locally.
+<b>Artifact:</b> <code>~/.sfdx/&lt;username&gt;.json</code>.
+<b>Verify:</b> <code>sf org list</code> shows <code>pkgorg</code> as <i>Connected</i>.</p>
+
+<h2>Step 3 &mdash; The packaging org</h2>
+<p><b>You:</b> decide which DE org this is (the one you reserved for the namespace) and never use it for
+anything else. <b>Salesforce:</b> nothing &mdash; &ldquo;packaging org&rdquo; is a role you assign, not a setting you flip.
+<b>Verify:</b> you can log in via <code>sf org open --target-org pkgorg</code> and Setup &rarr; Package Manager exists.</p>
+
+<h2>Step 4 &mdash; Register the namespace</h2>
+<p><b>You (UI, packaging org):</b> Setup &rarr; <b>Package Manager</b> &rarr; Developer Settings &rarr; <b>Edit</b>
+&rarr; Continue &rarr; type namespace &rarr; <b>Check Availability</b> &rarr; Review &rarr; <b>Save</b>.</p>
+<p><b>Salesforce:</b> permanently associates the namespace with this org and starts prefixing every new
+custom component created in it. <b>Artifact:</b> the namespace prefix shown on the Package Manager page.</p>
+<p><b>Verify:</b></p>
+<div class="codewrap"><div class="codebar"><span>bash</span><button class="copy" type="button">Copy</button></div><pre class="code"><code>sf data query --target-org pkgorg \
+  --query &quot;SELECT Id, NamespacePrefix FROM Organization&quot;</code></pre></div>
+<p>The result must show your namespace. If it is blank, the registration did not save.</p>
+<div class="stop"><p><b>Point of no return #1.</b> After this, every custom object and class created in
+this org carries the prefix, and the namespace can never be moved to another org.</p></div>
+
+<h2>Step 5 &mdash; Create the package</h2>
+<p><b>You (UI, packaging org):</b> Package Manager &rarr; <b>Packages</b> &rarr; <b>New</b>:</p>
+<ul>
+<li><b>Package Name:</b> <code>Ops Toolkit Core (1GP)</code></li>
+<li><b>Description:</b> what it is</li>
+<li><b>Managed:</b> ✔ (this checkbox is why the namespace had to come first)</li>
+<li>Optionally a <b>Post Install Script</b> and <b>Uninstall Script</b> &mdash; leave blank for now</li>
+</ul>
+<p><b>Salesforce:</b> creates the package container. <b>Artifact:</b> a package with a <code>033</code> ID
+(visible in the URL of the package detail page).</p>
+<p><b>Verify:</b> <code>sf package1 version list --target-org pkgorg</code> runs without error (it will be
+empty), and the package appears under Packages.</p>
+
+<h2>Step 6 &mdash; Deploy metadata and add it to the package</h2>
+<div class="codewrap"><div class="codebar"><span>bash</span><button class="copy" type="button">Copy</button></div><pre class="code"><code># from sample-project/1gp
+sf project deploy start --source-dir force-app --target-org pkgorg
+sf apex run test --target-org pkgorg --code-coverage --result-format human --wait 10</code></pre></div>
+<p><b>Salesforce:</b> Metadata API deploy &rarr; components created <b>with your namespace prefix</b> &rarr; Apex
+compiled. <b>Verify:</b> Setup &rarr; Object Manager shows <code>Service Request</code> with API name
+<code>opskit__Service_Request__c</code>, and tests pass at &gt;75%.</p>
+<p><b>You (UI):</b> Package Manager &rarr; your package &rarr; <b>Add Components</b>. Add:</p>
+<ul>
+<li>Custom Object: Service Request (fields, validation rule and list view come along)</li>
+<li>Custom Metadata Type: Ops Setting &mdash; and separately the <b>Custom Metadata record</b> &ldquo;Default&rdquo;</li>
+<li>Apex Classes: OpsSettings, ServiceRequestService, ServiceRequestSelector, ServiceRequestServiceTest</li>
+<li>Custom Labels: the three <code>Ops_*</code> labels</li>
+<li>Permission Set: Ops Toolkit Core User</li>
+<li>Custom Tab: Service Requests</li>
+</ul>
+<div class="tip"><p><b>Verification that catches the #1 1GP mistake:</b> after adding, the package detail
+page lists a component count. Compare it against
+<code>find force-app -name '*-meta.xml' | wc -l</code> mentally &mdash; not exact, but if the package shows 6
+components and you deployed 20 files, you forgot something.</p></div>
+
+<h2>Step 7 &mdash; Upload a BETA version</h2>
+<p><b>You (UI):</b> package detail &rarr; <b>Upload</b>. Version Name <code>Beta 1</code>, Version Number
+<code>1.0</code>, Password (installation key) <code>LearnPackaging123</code>, and choose <b>Managed &mdash; Beta</b>.</p>
+<p><b>Or CLI:</b></p>
+<div class="codewrap"><div class="codebar"><span>bash</span><button class="copy" type="button">Copy</button></div><pre class="code"><code>sf package1 version create \
+  --target-org pkgorg \
+  --package-id 033xx0000004Cxx \
+  --name &quot;Beta 1&quot; --version &quot;1.0&quot; \
+  --installation-key &quot;LearnPackaging123&quot; --wait 20</code></pre></div>
+<p><b>Salesforce (behind the scenes):</b> creates a <code>PackageUploadRequest</code>; validates the component
+set; compiles all packaged Apex; runs your tests <span class="badge b-inf">Inference</span> (a released
+upload definitively runs them and enforces 75%); snapshots the components; mints a
+<code>SubscriberPackageVersion</code> (<code>04t</code>) and an install URL. It emails you when done.</p>
+<p><b>Artifact:</b> a row under <b>Versions</b> with a <code>04t</code> ID and an install URL.</p>
+<p><b>Verify:</b></p>
+<div class="codewrap"><div class="codebar"><span>bash</span><button class="copy" type="button">Copy</button></div><pre class="code"><code>sf package1 version list --package-id 033xx0000004Cxx --target-org pkgorg</code></pre></div>
+
+<h2>Step 8 &mdash; Install the beta in a clean org</h2>
+<div class="codewrap"><div class="codebar"><span>bash</span><button class="copy" type="button">Copy</button></div><pre class="code"><code># A customer-like org: NOT namespaced, never saw your source.
+sf org create scratch --definition-file ../config/customer-like-scratch-def.json \
+  --alias customer1 --duration-days 2 --no-namespace --target-dev-hub devhub
+
+sf package install --package 04txx0000000001AAA \
+  --installation-key &quot;LearnPackaging123&quot; \
+  --target-org customer1 --wait 20 --publish-wait 20 --no-prompt
+
+sf package installed list --target-org customer1</code></pre></div>
+<div class="note"><p>Beta versions may be installed in scratch orgs, sandboxes, DE orgs and Trialforce
+source orgs &mdash; not production. That is <b>the</b> practical difference between beta and released.</p></div>
+<p><b>Verify like a customer, not like a developer:</b></p>
+<ul class="check">
+<li>Setup &rarr; Installed Packages shows your package, version 1.0, with your namespace</li>
+<li>Create a user (or use yourself) <b>without</b> System Administrator, assign only <code>opskit__Ops_Core_User</code>, and confirm they can see the tab and create a request</li>
+<li>Object Manager shows the fields prefixed <code>opskit__</code></li>
+<li>The Apex classes are visible but <b>not editable</b> &mdash; that is namespace isolation working</li>
+<li><code>SELECT SLA_Days__c FROM opskit__Ops_Setting__mdt</code> returns your shipped &ldquo;Default&rdquo; record</li>
+</ul>
+
+<h2>Step 9 &mdash; Find a defect on purpose</h2>
+<p>You will find one. Typical first-install defects, all real:</p>
+<div class="tablewrap">
+<table>
+<thead><tr><th>Symptom in the customer org</th><th>Root cause</th><th>Fix</th></tr></thead>
+<tbody>
+<tr><td>Tab exists, but the user sees &ldquo;insufficient privileges&rdquo;</td><td>Permission set missing object or tab settings</td><td>Fix the permission set, redeploy, re-add, new version</td></tr>
+<tr><td>Console LWC empty for non-admins</td><td>Apex class access not granted in the permission set</td><td>Add <code>classAccesses</code></td></tr>
+<tr><td>Field missing entirely</td><td>Field was deployed but never <b>added to the package</b></td><td>Add Components</td></tr>
+<tr><td>Formula/validation references a field that is not packaged</td><td>Partial component set</td><td>Add the dependency</td></tr>
+<tr><td>Label shows as <code>Ops_Request_Created</code> literal</td><td>Label not packaged</td><td>Add Custom Labels</td></tr>
+</tbody>
+</table>
+</div>
+
+<h2>Step 10 &mdash; Fix and upload a new version</h2>
+<div class="codewrap"><div class="codebar"><span>bash</span><button class="copy" type="button">Copy</button></div><pre class="code"><code># fix locally, commit, redeploy
+git commit -am &quot;fix: grant tab visibility in Ops_Core_User&quot;
+sf project deploy start --source-dir force-app --target-org pkgorg</code></pre></div>
+<p>Then upload again as <b>Managed &mdash; Beta</b>, version <code>1.0</code> (Salesforce increments the internal
+build) or bump to <code>1.1</code>. Re-install into a <b>fresh</b> customer org &mdash; you cannot upgrade <i>from</i> a
+beta, so betas are always fresh installs.</p>
+
+<h2>Step 11 &mdash; Release version 1.0</h2>
+<p><b>You (UI):</b> Upload &rarr; Version Name <code>1.0 GA</code> &rarr; Version Number <code>1.0</code> &rarr;
+<b>Managed &mdash; Released</b>.</p>
+<p><b>Salesforce:</b> runs <b>all</b> Apex tests in the packaging org and blocks the upload below 75%
+coverage <span class="badge b-doc">Documented</span>; then mints a permanent <code>04t</code>.</p>
+<div class="stop"><p><b>Point of no return #2.</b> This version is now immutable and undeletable, and
+your <code>global</code> API surface is frozen. Do not do this until Step 8's checklist passed.</p></div>
+<p><b>Verify:</b> the version row shows status <b>Managed &mdash; Released</b>; install it into a brand new
+customer-like org and repeat the customer checks.</p>
+
+<h2>Step 12 &mdash; Ship 1.1 and perform an upgrade</h2>
+<ol class="steps">
+<li><b>Add something additive</b> &mdash; e.g. a new field <code>Resolution_Notes__c</code> and a new
+<code>global</code> method. Nothing removed, nothing renamed.</li>
+<li>Deploy to the packaging org, <b>Add Components</b> for the new field, run tests.</li>
+<li>Upload as <b>Managed &mdash; Released</b>, Version Number <b>1.1</b>.</li>
+<li>In the customer org that already has 1.0 (the released one), install the 1.1 <code>04t</code>:
+<div class="codewrap"><div class="codebar"><span>bash</span><button class="copy" type="button">Copy</button></div><pre class="code"><code>sf package install --package 04t...11 --target-org customer1 \
+  --installation-key &quot;LearnPackaging123&quot; --wait 20 --no-prompt
+sf package installed list --target-org customer1     # should now show 1.1</code></pre></div>
+</li>
+<li><b>Verify the point of the whole exercise:</b> the Service Request records you created under 1.0 are
+still there, with their data, and the new field exists and is empty. <b>Metadata upgraded, data preserved.</b></li>
+</ol>
+
+<h2>What you should be able to explain now</h2>
+<ul class="check">
+<li>Why the namespace org and the packaging org are the same org in 1GP</li>
+<li>What Salesforce reads to decide what goes into a version</li>
+<li>Why a beta cannot be upgraded from</li>
+<li>What the 75% coverage gate applies to, and when it is enforced</li>
+<li>Why you must install into a non-namespaced org you never pushed source to</li>
+<li>What a patch org is and why merging the fix forward is your responsibility</li>
+<li>Three things you can never change after Step 11</li>
+</ul>
+
+  <nav class="pager"><a class="prev" href="05-1gp.html"><span>Previous</span>5 &middot; 1GP concepts</a><a class="next" href="07-2gp.html"><span>Next</span>7 &middot; 2GP concepts</a></nav>
+  <footer class="sitefoot">
+    <p>Built as a personal learning course. Salesforce behaviour changes between releases &mdash;
+    always confirm against <a href="https://developer.salesforce.com/docs/atlas.en-us.sfdx_dev.meta/sfdx_dev/">Salesforce DX Developer Guide</a>
+    and the <a href="https://developer.salesforce.com/docs/atlas.en-us.packagingGuide.meta/packagingGuide/">ISVforce / Packaging guides</a>
+    before you rely on a detail in production.</p>
+  </footer>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

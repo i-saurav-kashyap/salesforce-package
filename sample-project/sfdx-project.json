@@ -1,0 +1,27 @@
+{
+  "packageDirectories": [
+    {
+      "path": "packages/core",
+      "package": "Ops Toolkit Core",
+      "versionName": "Spring Release",
+      "versionNumber": "1.0.0.NEXT",
+      "versionDescription": "Core objects, settings and services for the Ops Toolkit",
+      "default": true
+    },
+    {
+      "path": "packages/field-ops",
+      "package": "Ops Toolkit Field Ops",
+      "versionName": "Spring Release",
+      "versionNumber": "1.0.0.NEXT",
+      "versionDescription": "Field operations console built on Ops Toolkit Core",
+      "default": false,
+      "dependencies": [
+        { "package": "Ops Toolkit Core", "versionNumber": "1.0.0.LATEST" }
+      ]
+    }
+  ],
+  "namespace": "opskit",
+  "sfdcLoginUrl": "https://login.salesforce.com",
+  "sourceApiVersion": "62.0",
+  "packageAliases": {}
+}

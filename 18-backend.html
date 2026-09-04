@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>What Salesforce Does Internally &middot; AppExchange From Zero</title>
+<link rel="stylesheet" href="assets/site.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<button class="navtoggle" aria-label="Toggle navigation">&#9776; Contents</button>
+<div class="shell">
+<nav class="sidenav" id="sidenav">
+  <div class="brand">
+    <span class="brand-mark">SF</span>
+    <span class="brand-text">AppExchange<br><b>From Zero</b></span>
+  </div>
+  <ol class="navlist">
+    <li><a href="index.html">Start here</a></li>
+    <li><a href="01-big-picture.html">1 &middot; Big picture</a></li>
+    <li><a href="02-orgs.html">2 &middot; Org architecture</a></li>
+    <li><a href="03-prereqs.html">3 &middot; Prerequisites</a></li>
+    <li><a href="04-the-app.html">4 &middot; The app</a></li>
+    <li><a href="05-1gp.html">5 &middot; 1GP concepts</a></li>
+    <li><a href="06-1gp-lifecycle.html">6 &middot; 1GP lifecycle</a></li>
+    <li><a href="07-2gp.html">7 &middot; 2GP concepts</a></li>
+    <li><a href="08-2gp-build.html">8 &middot; 2GP build</a></li>
+    <li><a href="09-scratch-orgs.html">9 &middot; Scratch orgs</a></li>
+    <li><a href="10-compare.html">10 &middot; 1GP vs 2GP</a></li>
+    <li><a href="11-dependencies.html">11 &middot; Dependencies</a></li>
+    <li><a href="12-install.html">12 &middot; Install &amp; upgrade</a></li>
+    <li><a href="13-security.html">13 &middot; Security Review</a></li>
+    <li><a href="14-cicd.html">14 &middot; CI/CD</a></li>
+    <li><a href="15-appexchange.html">15 &middot; AppExchange</a></li>
+    <li><a href="16-day-plan.html">16 &middot; Day-by-day plan</a></li>
+    <li><a href="17-debugging.html">17 &middot; Debug drills</a></li>
+    <li><a href="17b-error-index.html">17b &middot; Error index</a></li>
+    <li class="here"><a href="18-backend.html">18 &middot; Behind the scenes</a></li>
+    <li><a href="19-commands.html">19 &middot; Command cheat sheet</a></li>
+    <li><a href="20-quiz.html">20 &middot; Knowledge test</a></li>
+  </ol>
+  <div class="navfoot">
+    <p>Local course site.<br>Regenerate with <code>python3 build.py</code></p>
+  </div>
+</nav>
+<main id="main">
+  <header class="pagehead">
+    <p class="kicker">Part 18</p>
+    <h1>What Salesforce Does Internally</h1>
+  </header>
+  <p class="lead">What is actually happening when you type a command. Everything here is marked:
+<span class="badge b-doc">Documented</span> behaviour Salesforce publishes,
+<span class="badge b-inf">Inference</span> a reasonable conclusion from observable behaviour, or
+<span class="badge b-unk">Verify</span> something Salesforce does not expose. Nothing is presented as
+internal knowledge I do not have.</p>
+
+<h2>Layer 0 &mdash; what the CLI actually is</h2>
+<p><span class="badge b-doc">Documented</span> The <code>sf</code> CLI is a Node.js application built on
+oclif. It holds no Salesforce logic of its own: it authenticates, calls documented Salesforce APIs, and
+formats the responses.</p>
+<div class="tablewrap">
+<table>
+<thead><tr><th>API</th><th>Used for</th></tr></thead>
+<tbody>
+<tr><td><b>Metadata API</b> (SOAP)</td><td>deploy / retrieve of metadata as a zip</td></tr>
+<tr><td><b>Tooling API</b> (REST)</td><td>Packaging objects (<code>Package2</code>, <code>Package2Version</code>, <code>Package2VersionCreateRequest</code>, <code>PackageUploadRequest</code>, <code>PackageInstallRequest</code>), <code>ScratchOrgInfo</code>, anonymous Apex, test runs</td></tr>
+<tr><td><b>REST/SOAP data APIs</b></td><td><code>sf data query</code>, record CRUD</td></tr>
+<tr><td><b>OAuth 2.0</b></td><td>web flow, device flow, JWT bearer flow</td></tr>
+</tbody>
+</table>
+</div>
+<p><b>Prove it yourself</b> &mdash; the CLI will show you the API traffic:</p>
+<div class="codewrap"><div class="codebar"><span>bash</span><button class="copy" type="button">Copy</button></div><pre class="code"><code>SF_LOG_LEVEL=debug sf package version list --target-dev-hub devhub
+sf package version list --json | jq &#x27;.result[0]&#x27;      # the raw record shape</code></pre></div>
+
+<h2>Layer 1 &mdash; authentication</h2>
+<pre class="diagram">sf org login web
+   │
+   ├─ CLI starts a local listener on 127.0.0.1:1717
+   ├─ opens the browser to &lt;instance&gt;/services/oauth2/authorize
+   ├─ you log in + consent  (password never touches the CLI)
+   ├─ Salesforce redirects to localhost with an auth code
+   ├─ CLI exchanges the code for access + refresh tokens
+   └─ stores them under ~/.sfdx/&lt;username&gt;.json   (mode 600)
+
+every later command:  refresh token ──► access token ──► API call</pre>
+<p><span class="badge b-doc">Documented</span> standard OAuth. <span class="badge b-inf">Inference</span>
+the local-listener detail is observable but not contractual; use <code>sf org login device</code> when a
+browser redirect to localhost is impossible.</p>
+
+<h2>Layer 2 &mdash; scratch org creation</h2>
+<pre class="diagram">sf org create scratch -f config/project-scratch-def.json
+   │
+   1. CLI merges: definition file + sfdx-project.json namespace + flags
+   2. CLI INSERTS a ScratchOrgInfo record into the DEV HUB            [Documented]
+        Edition, Features, Settings, Namespace, DurationDays, AdminEmail...
+   3. Salesforce&#x27;s org-provisioning service picks it up               [Inference]
+        - allocates an org on an instance
+        - applies edition, licences, features, settings
+        - (Salesforce does not publish how this is implemented)       [Not exposed]
+   4. ScratchOrgInfo.Status → Active, with SignupUsername + AuthCode
+   5. CLI authenticates to the new org and saves the alias locally</pre>
+<p>The <b>useful</b> consequence: when creation fails, the authoritative error is on the
+<code>ScratchOrgInfo</code> record in the Dev Hub, not in the CLI output.</p>
+
+<h2>Layer 3 &mdash; metadata deploy</h2>
+<pre class="diagram">sf project deploy start
+   │
+   1. Resolve source files → metadata components (package.xml built for you)
+   2. Zip them
+   3. Metadata API deploy() → returns an async job id
+   4. CLI polls deployResult until Succeeded / Failed
+   5. In the org: validate → create/update components → COMPILE APEX → commit
+      (all-or-nothing: a failure rolls the whole deployment back)     [Documented]</pre>
+<p>In source-tracked orgs the CLI first asks the org which components changed, so a deploy with no flags
+sends only the delta. <span class="badge b-doc">Documented</span></p>
+
+<h2>Layer 4 &mdash; 2GP package version creation</h2>
+<p>This is the one you asked to see in depth.</p>
+<pre class="diagram">sf package version create --package &quot;Ops Toolkit Field Ops&quot; --code-coverage
+   │
+ [Documented] 1. CLI reads sfdx-project.json: path, version, dependencies, ancestry
+ [Documented] 2. CLI packages the source under that path and uploads it as a
+                 VersionInfo blob, then INSERTS a Package2VersionCreateRequest (08c)
+                 into the Dev Hub via the Tooling API
+ [Documented] 3. The request enters a queue; status: Queued → InProgress → Success/Error
+ [Inference]  4. Salesforce provisions a BUILD ENVIRONMENT (an org-like environment
+                 with your namespace applied). Its exact nature is not published.
+ [Documented] 5. Declared DEPENDENCIES are installed into that environment first
+                 (observable: dependency errors surface here as install failures)
+ [Documented] 6. Your metadata is deployed into it
+ [Documented] 7. Apex is COMPILED — unresolved symbols fail the build here
+ [Documented] 8. If --code-coverage: your Apex TESTS run; coverage is recorded ON the version
+ [Documented] 9. Ancestry is validated: removing/changing released global API fails the build
+ [Documented]10. A Package2Version (05i) is created with a SubscriberPackageVersionId (04t)
+ [Inference] 11. The build environment is discarded
+ [Documented]12. CLI writes the new alias into sfdx-project.json</pre>
+<p><b>Things Salesforce does not publicly expose</b> <span class="badge b-unk">Verify</span>: how build
+environments are pooled or scheduled, why the same build takes 4 minutes one day and 25 the next, where
+the compiled artefact is stored, and how the artefact is distributed to instances at install time. Do not
+build a process that assumes any of it.</p>
+<p><b>Practical consequences of the pipeline above:</b></p>
+<ul>
+<li>Anything your code needs that is neither in the package directory nor in a declared dependency
+<b>does not exist</b> during the build. That is drills 7 and 8 in <a href="17-debugging.html">Part 17</a>.</li>
+<li>Your tests run in a place with <b>no seed data and no org customisation</b>. Tests that depend on
+either will fail there and nowhere else.</li>
+<li>Coverage is a property <b>of the version</b>, computed once. That is why you cannot promote a version
+that was created without <code>--code-coverage</code>.</li>
+<li>Build time scales with dependencies, metadata volume and test duration &mdash; not with your patience.</li>
+</ul>
+
+<h2>Layer 4b &mdash; 1GP version upload, for contrast</h2>
+<pre class="diagram">Upload (UI)  or  sf package1 version create
+   │
+ [Documented] 1. A PackageUploadRequest record is created in the PACKAGING ORG
+ [Documented] 2. Salesforce reads the package&#x27;s component list IN THAT ORG
+ [Documented] 3. Validates the component set and its dependencies
+ [Documented] 4. Compiles Apex; for a Managed-Released upload, runs all tests and
+                 enforces ≥75% coverage
+ [Inference]  5. Snapshots the components into a distributable artifact
+ [Documented] 6. Mints a SubscriberPackageVersion (04t) + install URL, emails you</pre>
+<p><b>The structural difference in one line:</b> 2GP's input is <b>your source tree</b>; 1GP's input is
+<b>the current state of an org</b>.</p>
+
+<h2>Layer 5 &mdash; installation in a subscriber org</h2>
+<pre class="diagram">sf package install --package 04t...      (or the install URL)
+   │
+ [Documented] 1. A PackageInstallRequest is created in the TARGET org
+ [Documented] 2. Validation: is the version released (for production)? key correct?
+                 edition/features sufficient? dependencies present?
+ [Documented] 3. Components are created in the org under YOUR namespace
+ [Documented] 4. Apex is compiled IN THE SUBSCRIBER ORG
+                 → a compile failure against their org fails the install
+ [Documented] 5. Packaged tests may be run (notably for production installs)
+ [Documented] 6. Your InstallHandler (post-install script) executes
+ [Documented] 7. Licence record created via the LMA in your PBO
+ [Documented] 8. Install request → Success; components visible in Setup</pre>
+<p><span class="badge b-inf">Inference</span> Step 4 is why an upgrade can fail in one customer org and
+succeed in another: their org's metadata is part of the compilation context.</p>
+
+<h2>Layer 6 &mdash; namespace resolution at runtime</h2>
+<div class="tablewrap">
+<table>
+<thead><tr><th>In your source</th><th>In a subscriber org</th><th>Who rewrites it</th></tr></thead>
+<tbody>
+<tr><td><code>Service_Request__c</code></td><td><code>opskit__Service_Request__c</code></td><td>The platform, at package/install time</td></tr>
+<tr><td><code>ServiceRequestService</code></td><td><code>opskit.ServiceRequestService</code></td><td>Same</td></tr>
+<tr><td><code>c.Ops_Request_Created</code> (LWC label import)</td><td><code>opskit__Ops_Request_Created</code></td><td>Same</td></tr>
+<tr><td><code>&lt;c-service-request-console&gt;</code></td><td><code>&lt;opskit-service-request-console&gt;</code></td><td>Same</td></tr>
+<tr><td>A hard-coded string <code>'Service_Request__c'</code> in dynamic SOQL</td><td>Resolves inside your namespace context <span class="badge b-inf">Inference</span></td><td>Runtime namespace context &mdash; <b>test this, do not assume it</b></td></tr>
+<tr><td>A hard-coded string <code>'opskit__Service_Request__c'</code></td><td>Works in the subscriber org, breaks in your non-namespaced dev context</td><td>Nobody &mdash; which is the problem</td></tr>
+</tbody>
+</table>
+</div>
+<p><b>Rule that avoids the whole category:</b> never hard-code an API name where
+<code>Schema.SObjectType</code>, <code>Service_Request__c.SObjectType.getDescribe().getName()</code>, or static
+SOQL would do.</p>
+
+<h2>How to verify any claim on this page yourself</h2>
+<div class="codewrap"><div class="codebar"><span>bash</span><button class="copy" type="button">Copy</button></div><pre class="code"><code># The packaging objects, straight from the Dev Hub
+sf data query --target-org devhub --use-tooling-api --query \
+&quot;SELECT Id, Name, NamespacePrefix, ContainerOptions FROM Package2&quot;
+
+sf data query --target-org devhub --use-tooling-api --query \
+&quot;SELECT Id, Status, Package2Id, Package2VersionId, Error FROM Package2VersionCreateRequest \
+ORDER BY CreatedDate DESC LIMIT 5&quot;
+
+sf data query --target-org devhub --use-tooling-api --query \
+&quot;SELECT Id, MajorVersion, MinorVersion, PatchVersion, BuildNumber, IsReleased, \
+CodeCoverage, SubscriberPackageVersionId FROM Package2Version ORDER BY CreatedDate DESC LIMIT 10&quot;
+
+# What a target org thinks is installed
+sf data query --target-org customer1 --use-tooling-api --query \
+&quot;SELECT SubscriberPackage.Name, SubscriberPackageVersion.Id, \
+SubscriberPackageVersion.MajorVersion, SubscriberPackageVersion.MinorVersion \
+FROM InstalledSubscriberPackage&quot;</code></pre></div>
+<div class="tip"><p>Being able to read these objects directly is what separates &ldquo;the CLI said something
+confusing&rdquo; from &ldquo;here is exactly what Salesforce recorded and why&rdquo;. Learn these four queries.</p></div>
+
+  <nav class="pager"><a class="prev" href="17b-error-index.html"><span>Previous</span>17b &middot; Error index</a><a class="next" href="19-commands.html"><span>Next</span>19 &middot; Command cheat sheet</a></nav>
+  <footer class="sitefoot">
+    <p>Built as a personal learning course. Salesforce behaviour changes between releases &mdash;
+    always confirm against <a href="https://developer.salesforce.com/docs/atlas.en-us.sfdx_dev.meta/sfdx_dev/">Salesforce DX Developer Guide</a>
+    and the <a href="https://developer.salesforce.com/docs/atlas.en-us.packagingGuide.meta/packagingGuide/">ISVforce / Packaging guides</a>
+    before you rely on a detail in production.</p>
+  </footer>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

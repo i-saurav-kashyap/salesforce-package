@@ -1,0 +1,304 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Error Field Guide &middot; AppExchange From Zero</title>
+<link rel="stylesheet" href="assets/site.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<button class="navtoggle" aria-label="Toggle navigation">&#9776; Contents</button>
+<div class="shell">
+<nav class="sidenav" id="sidenav">
+  <div class="brand">
+    <span class="brand-mark">SF</span>
+    <span class="brand-text">AppExchange<br><b>From Zero</b></span>
+  </div>
+  <ol class="navlist">
+    <li><a href="index.html">Start here</a></li>
+    <li><a href="01-big-picture.html">1 &middot; Big picture</a></li>
+    <li><a href="02-orgs.html">2 &middot; Org architecture</a></li>
+    <li><a href="03-prereqs.html">3 &middot; Prerequisites</a></li>
+    <li><a href="04-the-app.html">4 &middot; The app</a></li>
+    <li><a href="05-1gp.html">5 &middot; 1GP concepts</a></li>
+    <li><a href="06-1gp-lifecycle.html">6 &middot; 1GP lifecycle</a></li>
+    <li><a href="07-2gp.html">7 &middot; 2GP concepts</a></li>
+    <li><a href="08-2gp-build.html">8 &middot; 2GP build</a></li>
+    <li><a href="09-scratch-orgs.html">9 &middot; Scratch orgs</a></li>
+    <li><a href="10-compare.html">10 &middot; 1GP vs 2GP</a></li>
+    <li><a href="11-dependencies.html">11 &middot; Dependencies</a></li>
+    <li><a href="12-install.html">12 &middot; Install &amp; upgrade</a></li>
+    <li><a href="13-security.html">13 &middot; Security Review</a></li>
+    <li><a href="14-cicd.html">14 &middot; CI/CD</a></li>
+    <li><a href="15-appexchange.html">15 &middot; AppExchange</a></li>
+    <li><a href="16-day-plan.html">16 &middot; Day-by-day plan</a></li>
+    <li><a href="17-debugging.html">17 &middot; Debug drills</a></li>
+    <li class="here"><a href="17b-error-index.html">17b &middot; Error index</a></li>
+    <li><a href="18-backend.html">18 &middot; Behind the scenes</a></li>
+    <li><a href="19-commands.html">19 &middot; Command cheat sheet</a></li>
+    <li><a href="20-quiz.html">20 &middot; Knowledge test</a></li>
+  </ol>
+  <div class="navfoot">
+    <p>Local course site.<br>Regenerate with <code>python3 build.py</code></p>
+  </div>
+</nav>
+<main id="main">
+  <header class="pagehead">
+    <p class="kicker">Part 17b</p>
+    <h1>The Error Field Guide</h1>
+  </header>
+  <p class="lead">The lookup page. You have an error in front of you and you want the cause in ten seconds,
+not a lesson. Find the shape of your message, follow the link, move on. The narrative version with the
+reasoning practice is in <a href="17-debugging.html">Break It On Purpose</a>.</p>
+
+<h2>Symptom &rarr; cause &rarr; where to go</h2>
+
+<h3>Authentication &amp; CLI</h3>
+<div class="tablewrap">
+<table class="decoder">
+<thead><tr><th>You see</th><th>It means</th><th>Go to</th></tr></thead>
+<tbody>
+<tr><td>No authorization information found for X</td><td>Local token missing/revoked/expired, or two CLIs installed</td><td><a href="17-debugging.html#d1">Drill 1</a></td></tr>
+<tr><td>This command requires a username / no default environment</td><td>No default org set and no <code>--target-org</code> passed</td><td><a href="17-debugging.html#d2">Drill 2</a></td></tr>
+<tr><td>expired access/refresh token &middot; INVALID_SESSION_ID</td><td>Token revoked, password changed, or the scratch org died</td><td><a href="17-debugging.html#d1">Drill 1</a></td></tr>
+<tr><td>invalid_grant &middot; user hasn't approved this consumer</td><td>JWT: bad key, mangled PEM newlines, or user not pre-authorised on the Connected App</td><td><a href="17-debugging.html#d3">Drill 3</a></td></tr>
+<tr><td>INVALID_TYPE: not available for this version of the API</td><td><code>sourceApiVersion</code> newer than the org, or too old for the metadata type</td><td><a href="17-debugging.html#d4">Drill 4</a></td></tr>
+<tr><td>Deploying to &lt;an org you did not expect&gt;</td><td>The default target org moved under you</td><td><a href="17-debugging.html#d2">Drill 2</a></td></tr>
+</tbody>
+</table>
+</div>
+
+<h3>Scratch orgs</h3>
+<div class="tablewrap">
+<table class="decoder">
+<tbody>
+<tr><td>The org needs to be enabled as a Dev Hub</td><td>Dev Hub off, or you targeted the wrong org</td><td><a href="17-debugging.html#d5">Drill 5</a></td></tr>
+<tr><td>sObject type 'ScratchOrgInfo' is not supported</td><td>Definitive proof Dev Hub is not enabled there</td><td><a href="17-debugging.html#d5">Drill 5</a></td></tr>
+<tr><td>The feature 'X' is not valid</td><td>Feature name wrong/renamed/edition-incompatible</td><td><a href="17-debugging.html#d6">Drill 6</a></td></tr>
+<tr><td>maximum number of active scratch orgs</td><td>Slots held by forgotten or CI-leaked orgs</td><td><a href="17-debugging.html#d7">Drill 7</a></td></tr>
+<tr><td>daily scratch org limit / signup request limit</td><td>Different limit &mdash; deleting orgs will not help; wait</td><td><a href="17-debugging.html#d7">Drill 7</a></td></tr>
+<tr><td>We found a conflict in the org and your local project</td><td>Same component edited in both places</td><td><a href="17-debugging.html#d8">Drill 8</a></td></tr>
+<tr><td>Org creation succeeded but <code>sf org open</code> fails</td><td>Provisioning still finishing, or a My Domain propagation delay &mdash; retry</td><td>&mdash;</td></tr>
+</tbody>
+</table>
+</div>
+
+<h3>Deployment</h3>
+<div class="tablewrap">
+<table class="decoder">
+<tbody>
+<tr><td>no CustomField named X.Y found</td><td>A component references metadata not in this deploy/org. <b>Read backwards</b>: the last name is the missing thing</td><td><a href="17-debugging.html#d9">Drill 9</a></td></tr>
+<tr><td>INVALID_CROSS_REFERENCE_KEY</td><td>Same family &mdash; pointing at something absent</td><td><a href="17-debugging.html#d9">Drill 9</a></td></tr>
+<tr><td>Dependent class is invalid and needs recompilation</td><td>Deployed Apex before what it references</td><td><a href="17-debugging.html#d11">Drill 11</a></td></tr>
+<tr><td>Works locally, fails from a clean clone</td><td>Untracked file, <code>.forceignore</code>, or filename case</td><td><a href="17-debugging.html#d10">Drill 10</a></td></tr>
+<tr><td>Invalid field X for SObject opskit__Y</td><td>Namespace applied in one place and not the other</td><td><a href="17-debugging.html#d12">Drill 12</a></td></tr>
+<tr><td>DUPLICATE_DEVELOPER_NAME</td><td>Component already exists (often a re-run of a seed script)</td><td>&mdash;</td></tr>
+<tr><td>Cannot change field type of a custom field</td><td>Field already carries data / is released</td><td><a href="05-1gp.html">Part 5</a></td></tr>
+</tbody>
+</table>
+</div>
+
+<h3>Package build (2GP)</h3>
+<div class="tablewrap">
+<table class="decoder">
+<tbody>
+<tr><td>The namespace 'X' is not linked to this Dev Hub</td><td>Registry link missing, or the project's namespace string differs</td><td><a href="17-debugging.html#d13">Drill 13</a></td></tr>
+<tr><td>Test failure only during version create</td><td>The build env has no seed data / manual config / other packages</td><td><a href="17-debugging.html#d14">Drill 14</a></td></tr>
+<tr><td>Invalid type: &lt;class from another package&gt;</td><td>Undeclared dependency</td><td><a href="17-debugging.html#d15">Drill 15</a></td></tr>
+<tr><td>code coverage is below 75%, or was not calculated</td><td>Missing <code>--code-coverage</code> at create time &mdash; unfixable in place</td><td><a href="17-debugging.html#d16">Drill 16</a></td></tr>
+<tr><td>The ancestor version is not valid / you removed a released component</td><td>Wrong ancestor <b>or</b> you broke backward compatibility</td><td><a href="17-debugging.html#d17">Drill 17</a></td></tr>
+<tr><td>Version create timed out</td><td>Client poll expired; the build continues server-side</td><td><a href="17-debugging.html#d18">Drill 18</a></td></tr>
+<tr><td>Package name already in use</td><td>A <code>Package2</code> with that name exists in this Dev Hub</td><td>&mdash;</td></tr>
+<tr><td>2GP is not enabled for this Dev Hub</td><td>&ldquo;Unlocked and Second-Generation Managed Packages&rdquo; toggle is off</td><td><a href="03-prereqs.html">Part 3</a></td></tr>
+</tbody>
+</table>
+</div>
+
+<h3>Package upload (1GP)</h3>
+<div class="tablewrap">
+<table class="decoder">
+<tbody>
+<tr><td>The Managed option is unavailable</td><td>No namespace registered in that org</td><td><a href="05-1gp.html">Part 5 Q3</a></td></tr>
+<tr><td>Average test coverage &hellip; at least 75% is required</td><td>Managed-Released upload runs all tests; check per-class coverage too</td><td><a href="06-1gp-lifecycle.html">Part 6 Step 11</a></td></tr>
+<tr><td>Customer's install is missing a field you deployed</td><td>Deployed to the packaging org but never <b>added to the package</b></td><td><a href="05-1gp.html">Part 5 Q8</a></td></tr>
+<tr><td>Cannot upload while another upload is in progress</td><td>Uploads serialise per package</td><td>&mdash;</td></tr>
+<tr><td>Released version contains something not in Git</td><td>Packaging-org drift</td><td><a href="17-debugging.html#d29">Drill 29</a></td></tr>
+</tbody>
+</table>
+</div>
+
+<h3>Installation &amp; upgrade</h3>
+<div class="tablewrap">
+<table class="decoder">
+<tbody>
+<tr><td>Please install the following required package versions</td><td>Dependency absent; Salesforce never auto-installs</td><td><a href="17-debugging.html#d19">Drill 19</a></td></tr>
+<tr><td>The package version is not available / no permission</td><td>Beta into production, not yet published, wrong key, or wrong ID type</td><td><a href="17-debugging.html#d20">Drill 20</a></td></tr>
+<tr><td>Org doesn't have the required feature or edition</td><td>Your metadata implicitly requires a feature you enabled in your scratch def</td><td><a href="17-debugging.html#d21">Drill 21</a></td></tr>
+<tr><td>Apex compile error in the subscriber org</td><td>Your code references metadata their org does not have</td><td><a href="17-debugging.html#d22">Drill 22</a></td></tr>
+<tr><td>Required field is missing on N records (during upgrade)</td><td>You tightened a constraint that their existing data violates</td><td><a href="17-debugging.html#d23">Drill 23</a></td></tr>
+<tr><td>Upgrade succeeded, customer sees no change</td><td>Layout/permission-set/CMDT customisation wins over your update</td><td><a href="17-debugging.html#d24">Drill 24</a></td></tr>
+<tr><td>The post install script failed</td><td>Governor limits, unexpected starting state, non-idempotent logic</td><td><a href="17-debugging.html#d25">Drill 25</a></td></tr>
+<tr><td>Cannot uninstall &mdash; another package depends on this one</td><td>Uninstall order is the reverse of install order</td><td><a href="11-dependencies.html">Part 11</a></td></tr>
+</tbody>
+</table>
+</div>
+
+<h3>Runtime in a customer org</h3>
+<div class="tablewrap">
+<table class="decoder">
+<tbody>
+<tr><td>Insufficient privileges / blank component for normal users</td><td>You tested as an admin; permission set is incomplete</td><td><a href="17-debugging.html#d26">Drill 26</a></td></tr>
+<tr><td>sObject type 'X__c' is not supported</td><td>API name evaluated outside your namespace context</td><td><a href="17-debugging.html#d27">Drill 27</a></td></tr>
+<tr><td>Too many SOQL queries: 101</td><td>Query in a loop, or trigger recursion, at their data volume</td><td><a href="17-debugging.html#d28">Drill 28</a></td></tr>
+<tr><td>Apex CPU time limit exceeded</td><td>Heavy synchronous work sharing the transaction with their automation</td><td><a href="17-debugging.html#d28">Drill 28</a></td></tr>
+<tr><td>UNABLE_TO_LOCK_ROW</td><td>You and their automation updating the same parent record</td><td><a href="17-debugging.html#d28">Drill 28</a></td></tr>
+<tr><td>You have uncommitted work pending</td><td>Callout after DML in one transaction</td><td><a href="17-debugging.html#d28">Drill 28</a></td></tr>
+<tr><td>MIXED_DML_OPERATION</td><td>Setup + non-setup objects in one transaction</td><td><a href="17-debugging.html#d28">Drill 28</a></td></tr>
+<tr><td>FIELD_CUSTOM_VALIDATION_EXCEPTION from code you did not write</td><td><b>Their</b> validation rule fired inside your DML</td><td>Below &sect;Subscriber debugging</td></tr>
+</tbody>
+</table>
+</div>
+
+<h2>The diagnostic playbook</h2>
+<p>Copy-paste blocks. Run the one for the layer that failed.</p>
+
+<h3>&ldquo;Which org am I actually talking to?&rdquo;</h3>
+<div class="codewrap"><div class="codebar"><span>bash</span><button class="copy" type="button">Copy</button></div><pre class="code"><code>sf org list --all
+sf config list                       # project + global defaults
+sf org display --target-org dev1
+sf data query --target-org dev1 --query &quot;SELECT Id, Name, OrganizationType, NamespacePrefix, \
+InstanceName, IsSandbox FROM Organization&quot;</code></pre></div>
+
+<h3>Scratch org creation failed</h3>
+<div class="codewrap"><div class="codebar"><span>bash</span><button class="copy" type="button">Copy</button></div><pre class="code"><code>sf data query --target-org devhub --query &quot;SELECT SignupUsername, Status, ErrorCode, Description, \
+CreatedDate FROM ScratchOrgInfo ORDER BY CreatedDate DESC LIMIT 5&quot;
+sf org list limits --target-org devhub
+sf data query --target-org devhub --query &quot;SELECT SignupUsername, ExpirationDate, CreatedBy.Name \
+FROM ActiveScratchOrg ORDER BY CreatedDate&quot;</code></pre></div>
+
+<h3>Deployment failed</h3>
+<div class="codewrap"><div class="codebar"><span>bash</span><button class="copy" type="button">Copy</button></div><pre class="code"><code>sf project deploy report --target-org dev1                  # full result of the last deploy
+sf project deploy preview --target-org dev1                 # what would go, what conflicts
+sf project deploy start --dry-run --target-org dev1         # validate without saving
+sf project retrieve preview --target-org dev1               # what changed in the org</code></pre></div>
+
+<h3>Package version build failed</h3>
+<div class="codewrap"><div class="codebar"><span>bash</span><button class="copy" type="button">Copy</button></div><pre class="code"><code>sf package version create list --target-dev-hub devhub                    # recent attempts
+sf package version create report --package-create-request-id 08c... -v devhub
+sf data query --target-org devhub --use-tooling-api --query \
+&quot;SELECT Id, Status, Error, Package2Id, CreatedDate FROM Package2VersionCreateRequest \
+ORDER BY CreatedDate DESC LIMIT 5&quot;</code></pre></div>
+
+<h3>Install / upgrade failed</h3>
+<div class="codewrap"><div class="codebar"><span>bash</span><button class="copy" type="button">Copy</button></div><pre class="code"><code>sf package install report --request-id 0Hf... --target-org customer1
+sf package installed list --target-org customer1
+sf package version report --package &quot;Ops Toolkit Field Ops@1.0.0-1&quot; -v devhub --verbose  # its dependencies
+sf data query --target-org customer1 --use-tooling-api --query \
+&quot;SELECT SubscriberPackage.Name, SubscriberPackageVersion.MajorVersion, \
+SubscriberPackageVersion.MinorVersion, SubscriberPackageVersion.Id FROM InstalledSubscriberPackage&quot;</code></pre></div>
+
+<h3>Runtime failure &mdash; get the logs</h3>
+<div class="codewrap"><div class="codebar"><span>bash</span><button class="copy" type="button">Copy</button></div><pre class="code"><code>sf apex tail log --target-org customer1                     # live stream while you reproduce
+sf apex get log --target-org customer1 --number 1           # most recent log
+sf apex run test --target-org customer1 --tests MyTest --result-format human
+sf apex run --file scripts/apex/probe.apex --target-org customer1   # ad-hoc probing</code></pre></div>
+
+<h2>Reading a debug log without drowning</h2>
+<p>A raw Apex log is thousands of lines. You almost never read it top to bottom.</p>
+<ol class="steps">
+<li><b>Set the levels first.</b> Setup &rarr; Debug Logs &rarr; new trace flag. Turn <b>Apex Code = FINEST</b> and
+<b>Database = FINEST</b>, and everything else to ERROR &mdash; noise from Workflow and Validation drowns the
+signal (though set <b>Validation = INFO</b> when hunting a rogue validation rule).</li>
+<li><b>Search for the exception first</b>, not the beginning: <code>FATAL_ERROR</code>,
+<code>EXCEPTION_THROWN</code>, <code>|FATAL|</code>.</li>
+<li><b>Then read upward</b> from the exception to the last <code>CODE_UNIT_STARTED</code> &mdash; that tells you
+whose code you were in when it died. In a subscriber org, this is how you discover you were inside
+<i>their</i> trigger.</li>
+<li><b>For limits</b>, jump to <code>LIMIT_USAGE_FOR_NS</code> at the end. It reports usage <b>per namespace</b>,
+so you can see whether the SOQL was yours or theirs.</li>
+<li><b>For &ldquo;why did nothing happen&rdquo;</b>, search <code>CODE_UNIT_STARTED</code> to confirm your code ran at all
+&mdash; half of these mysteries are code that never executed.</li>
+</ol>
+<div class="codewrap"><div class="codebar"><span>bash</span><button class="copy" type="button">Copy</button></div><pre class="code"><code>sf apex get log --target-org customer1 --number 1 &gt; log.txt
+grep -n -E &quot;FATAL_ERROR|EXCEPTION_THROWN|LIMIT_USAGE_FOR_NS&quot; log.txt | head -20
+sed -n &#x27;/LIMIT_USAGE_FOR_NS/,$p&#x27; log.txt | head -40      # the limits summary block</code></pre></div>
+<div class="tip"><p><b>The <code>LIMIT_USAGE_FOR_NS</code> block is the ISV's best friend.</b> It breaks limit
+consumption down by namespace, which settles the &ldquo;is it your package or ours?&rdquo; argument with a customer
+in about thirty seconds.</p></div>
+
+<h2>Debugging inside a subscriber org</h2>
+<p>You cannot log into a customer's org whenever you like. The supported route:</p>
+<ol class="steps">
+<li>The customer <b>grants login access</b> to your support organisation (their Setup &rarr; Grant Account
+Login Access), or your <b>License Management App</b> subscriber support access is enabled.</li>
+<li>From the <b>LMA in your PBO</b>, open the Subscribers list and log in to their org in a support
+context.</li>
+<li>You can inspect setup and run debug logs on <b>your own packaged code</b>; you generally cannot see
+their unpackaged Apex source, and your access is limited and audited.
+<span class="badge b-unk">Verify</span> exactly what subscriber support access permits in the current
+ISVforce Guide &mdash; the boundaries matter legally, not just technically.</li>
+</ol>
+<p><b>When you cannot get in at all</b>, ask the customer for exactly these five things &mdash; it converts a
+week of guessing into an afternoon:</p>
+<ul class="check">
+<li>The <b>full error text</b> and the time it happened, with their time zone</li>
+<li>Their <b>org ID</b>, edition, and whether it is production or sandbox</li>
+<li>The output of Setup &rarr; Installed Packages (your version <b>and</b> every other vendor's)</li>
+<li>A <b>debug log</b> of the failing action, with Apex Code = FINEST</li>
+<li>Whether it fails for <b>all users or one profile</b>, and for <b>all records or specific ones</b></li>
+</ul>
+<p>That last question is the highest-value one on the list: &ldquo;all users&rdquo; points at code or data, &ldquo;one
+profile&rdquo; points at permissions, and &ldquo;specific records&rdquo; points at sharing or data shape.</p>
+
+<h2>Limits worth knowing before you debug</h2>
+<div class="tablewrap">
+<table>
+<thead><tr><th>Limit</th><th>Typical value <span class="badge b-unk">Verify</span></th><th>Why an ISV hits it</th></tr></thead>
+<tbody>
+<tr><td>SOQL queries per transaction</td><td>100 (sync)</td><td>Your trigger + their trigger + their flow share the budget</td></tr>
+<tr><td>DML statements per transaction</td><td>150</td><td>Unbatched updates in loops</td></tr>
+<tr><td>DML rows per transaction</td><td>10,000</td><td>Bulk data loads by the customer, firing your trigger</td></tr>
+<tr><td>Apex CPU time (sync)</td><td>~10s</td><td>Heavy logic sharing a transaction you do not control</td></tr>
+<tr><td>Heap (sync)</td><td>6 MB</td><td>Large query results held in memory</td></tr>
+<tr><td>Callouts per transaction</td><td>100, 120s total</td><td>Integrations in a loop</td></tr>
+<tr><td>Query rows returned</td><td>50,000</td><td>Unfiltered selectors in a big org</td></tr>
+<tr><td>Concurrent long-running requests</td><td>10 per org</td><td>Your synchronous heavy operation blocks the whole org</td></tr>
+</tbody>
+</table>
+</div>
+<p>Values change by release and context (async limits are higher). Confirm the current numbers in the
+Apex Developer Guide's governor limits table before quoting them to anyone.</p>
+
+<h2>Prevention checklist &mdash; the ten habits that remove most of this page</h2>
+<ul class="check">
+<li>Always pass <code>--target-org</code> / <code>--target-dev-hub</code> explicitly in anything committed</li>
+<li>One CLI installed; never <code>sfdx</code> v7 alongside <code>sf</code> v2</li>
+<li>Deploy whole package directories, never subsets, and verify from a clean clone</li>
+<li>Every test creates its own data; no <code>SeeAllData</code>; no reliance on seed scripts</li>
+<li><code>--code-coverage</code> on every version create, without exception</li>
+<li>Declare the dependency in the same commit as the first cross-package reference</li>
+<li>Install-test in a <b>non-namespaced</b> org, at your lowest supported edition, as a <b>non-admin</b> user</li>
+<li>Rehearse the upgrade from the previous release with deliberately messy data</li>
+<li>Never hard-code an API name where a <code>Schema</code> describe would do</li>
+<li>CI deletes every org it creates with <code>if: always()</code>, and secrets never reach the repo</li>
+</ul>
+
+<div class="note"><p><b>When you are genuinely stuck</b>, a Partner Support case moves fastest when it
+contains: the exact command and its <code>--json</code> output, the relevant record ID
+(<code>08c</code>/<code>0Hf</code>/<code>ScratchOrgInfo</code>), the org IDs involved, what you expected, what you
+observed, and what you already ruled out. &ldquo;Package creation fails&rdquo; gets a request for information;
+the list above gets an answer.</p></div>
+
+  <nav class="pager"><a class="prev" href="17-debugging.html"><span>Previous</span>17 &middot; Debug drills</a><a class="next" href="18-backend.html"><span>Next</span>18 &middot; Behind the scenes</a></nav>
+  <footer class="sitefoot">
+    <p>Built as a personal learning course. Salesforce behaviour changes between releases &mdash;
+    always confirm against <a href="https://developer.salesforce.com/docs/atlas.en-us.sfdx_dev.meta/sfdx_dev/">Salesforce DX Developer Guide</a>
+    and the <a href="https://developer.salesforce.com/docs/atlas.en-us.packagingGuide.meta/packagingGuide/">ISVforce / Packaging guides</a>
+    before you rely on a detail in production.</p>
+  </footer>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

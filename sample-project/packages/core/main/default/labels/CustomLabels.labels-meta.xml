@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomLabels xmlns="http://soap.sforce.com/2006/04/metadata">
+    <labels>
+        <fullName>Ops_Request_Created</fullName>
+        <categories>OpsToolkit</categories>
+        <language>en_US</language>
+        <protected>false</protected>
+        <shortDescription>Toast shown after a service request is created</shortDescription>
+        <value>Service request created.</value>
+    </labels>
+    <labels>
+        <fullName>Ops_Summary_Required</fullName>
+        <categories>OpsToolkit</categories>
+        <language>en_US</language>
+        <protected>false</protected>
+        <shortDescription>Validation message when the summary is blank</shortDescription>
+        <value>A summary is required to raise a service request.</value>
+    </labels>
+    <labels>
+        <fullName>Ops_No_Access</fullName>
+        <categories>OpsToolkit</categories>
+        <language>en_US</language>
+        <protected>false</protected>
+        <shortDescription>Shown when the running user lacks access to Service Request</shortDescription>
+        <value>You do not have access to service requests. Ask your administrator for the Ops Toolkit permission set.</value>
+    </labels>
+</CustomLabels>

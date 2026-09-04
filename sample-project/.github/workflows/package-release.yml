@@ -1,0 +1,86 @@
+name: Build and release package versions
+
+# Triggered manually or by a tag. Creates BETA versions, installs them into a clean
+# customer-like org, runs the packaged tests there, and (optionally) promotes.
+on:
+  workflow_dispatch:
+    inputs:
+      promote:
+        description: 'Promote the created versions to released'
+        type: boolean
+        default: false
+  push:
+    tags: ['v*']
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - run: npm install --global @salesforce/cli
+
+      - name: Authenticate Dev Hub (JWT)
+        env:
+          DEVHUB_CLIENT_ID: ${{ secrets.DEVHUB_CLIENT_ID }}
+          DEVHUB_USERNAME: ${{ secrets.DEVHUB_USERNAME }}
+          DEVHUB_JWT_KEY: ${{ secrets.DEVHUB_JWT_KEY }}
+        run: |
+          echo "$DEVHUB_JWT_KEY" > server.key
+          sf org login jwt --client-id "$DEVHUB_CLIENT_ID" --jwt-key-file server.key \
+            --username "$DEVHUB_USERNAME" --set-default-dev-hub --alias devhub
+          rm -f server.key
+
+      - name: Create Core version
+        id: core
+        run: |
+          sf package version create --package "Ops Toolkit Core" \
+            --installation-key "${{ secrets.PACKAGE_INSTALL_KEY }}" \
+            --code-coverage --wait 60 --json > core.json
+          echo "id=$(jq -r '.result.SubscriberPackageVersionId' core.json)" >> "$GITHUB_OUTPUT"
+
+      - name: Create Field Ops version
+        id: fieldops
+        run: |
+          sf package version create --package "Ops Toolkit Field Ops" \
+            --installation-key "${{ secrets.PACKAGE_INSTALL_KEY }}" \
+            --code-coverage --wait 60 --json > fieldops.json
+          echo "id=$(jq -r '.result.SubscriberPackageVersionId' fieldops.json)" >> "$GITHUB_OUTPUT"
+
+      - name: Install into a clean customer-like org
+        run: |
+          sf org create scratch --definition-file config/customer-like-scratch-def.json \
+            --alias installtest --duration-days 1 --no-namespace --wait 20
+          for id in ${{ steps.core.outputs.id }} ${{ steps.fieldops.outputs.id }}; do
+            sf package install --package "$id" \
+              --installation-key "${{ secrets.PACKAGE_INSTALL_KEY }}" \
+              --target-org installtest --wait 30 --publish-wait 30 --no-prompt
+          done
+          sf package installed list --target-org installtest
+
+      - name: Run the packaged tests inside the install-test org
+        run: sf apex run test --target-org installtest --wait 30 --result-format human
+
+      - name: Promote (only when asked)
+        if: ${{ github.event.inputs.promote == 'true' }}
+        run: |
+          sf package version promote --package "${{ steps.core.outputs.id }}" --no-prompt
+          sf package version promote --package "${{ steps.fieldops.outputs.id }}" --no-prompt
+
+      - name: Commit updated package aliases
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add sfdx-project.json
+          git commit -m "chore: record package version aliases [skip ci]" || echo "nothing to commit"
+          git push || true
+
+      - name: Clean up
+        if: always()
+        run: sf org delete scratch --target-org installtest --no-prompt || true

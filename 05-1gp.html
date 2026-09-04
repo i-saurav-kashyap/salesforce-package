@@ -1,0 +1,292 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>1GP From Absolute Zero &middot; AppExchange From Zero</title>
+<link rel="stylesheet" href="assets/site.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<button class="navtoggle" aria-label="Toggle navigation">&#9776; Contents</button>
+<div class="shell">
+<nav class="sidenav" id="sidenav">
+  <div class="brand">
+    <span class="brand-mark">SF</span>
+    <span class="brand-text">AppExchange<br><b>From Zero</b></span>
+  </div>
+  <ol class="navlist">
+    <li><a href="index.html">Start here</a></li>
+    <li><a href="01-big-picture.html">1 &middot; Big picture</a></li>
+    <li><a href="02-orgs.html">2 &middot; Org architecture</a></li>
+    <li><a href="03-prereqs.html">3 &middot; Prerequisites</a></li>
+    <li><a href="04-the-app.html">4 &middot; The app</a></li>
+    <li class="here"><a href="05-1gp.html">5 &middot; 1GP concepts</a></li>
+    <li><a href="06-1gp-lifecycle.html">6 &middot; 1GP lifecycle</a></li>
+    <li><a href="07-2gp.html">7 &middot; 2GP concepts</a></li>
+    <li><a href="08-2gp-build.html">8 &middot; 2GP build</a></li>
+    <li><a href="09-scratch-orgs.html">9 &middot; Scratch orgs</a></li>
+    <li><a href="10-compare.html">10 &middot; 1GP vs 2GP</a></li>
+    <li><a href="11-dependencies.html">11 &middot; Dependencies</a></li>
+    <li><a href="12-install.html">12 &middot; Install &amp; upgrade</a></li>
+    <li><a href="13-security.html">13 &middot; Security Review</a></li>
+    <li><a href="14-cicd.html">14 &middot; CI/CD</a></li>
+    <li><a href="15-appexchange.html">15 &middot; AppExchange</a></li>
+    <li><a href="16-day-plan.html">16 &middot; Day-by-day plan</a></li>
+    <li><a href="17-debugging.html">17 &middot; Debug drills</a></li>
+    <li><a href="17b-error-index.html">17b &middot; Error index</a></li>
+    <li><a href="18-backend.html">18 &middot; Behind the scenes</a></li>
+    <li><a href="19-commands.html">19 &middot; Command cheat sheet</a></li>
+    <li><a href="20-quiz.html">20 &middot; Knowledge test</a></li>
+  </ol>
+  <div class="navfoot">
+    <p>Local course site.<br>Regenerate with <code>python3 build.py</code></p>
+  </div>
+</nav>
+<main id="main">
+  <header class="pagehead">
+    <p class="kicker">Part 5</p>
+    <h1>1GP From Absolute Zero</h1>
+  </header>
+  <p class="lead">Forget 2GP for the next two pages. We build a first-generation managed package the way
+ISVs did for fifteen years &mdash; because you will meet 1GP packages for the rest of your Salesforce career,
+and because 2GP only makes sense once you have felt what it fixed.</p>
+
+<div class="note"><p><b>Salesforce's current recommendation:</b> use <b>2GP</b> for new managed packages.
+1GP here is for <b>understanding</b>, and for working on existing products (Sitetracker's main package,
+for example, is 1GP). Do not launch a new AppExchange product on 1GP without a deliberate reason.</p></div>
+
+<h2>The 19 questions, answered</h2>
+
+<h3>1. Which org creates the namespace?</h3>
+<p>A <b>Developer Edition org</b>. Nothing else can register a namespace. You do it in
+<b>Setup &rarr; Package Manager &rarr; Developer Settings &rarr; Edit</b>. <span class="badge b-doc">Documented</span>
+It is permanent and globally unique.</p>
+
+<h3>2. Which org becomes the packaging org?</h3>
+<p><b>That same org.</b> In 1GP the namespace org and the packaging org are the same DE org &mdash; there is
+no separate concept. The moment you create a managed package in it, that org is your product's home
+forever.</p>
+
+<h3>3. How do I create/register the namespace?</h3>
+<ol class="steps">
+<li><b>Log into the DE org you reserved</b> for this (not your Dev Hub).</li>
+<li><b>Setup &rarr; quick find &ldquo;Package Manager&rdquo;</b> (older orgs: &ldquo;Packages&rdquo;).</li>
+<li>In the <b>Developer Settings</b> panel click <b>Edit</b>, then <b>Continue</b>.</li>
+<li>Type a candidate namespace (1&ndash;15 chars, starts with a letter, letters/numbers/underscores, no
+consecutive or trailing underscores) and click <b>Check Availability</b>.</li>
+<li>When one is available, <b>Review Your Selection</b> &rarr; <b>Save</b>.</li>
+</ol>
+<div class="stop"><p><b>There is no undo.</b> Salesforce warns you on this screen; believe it. Use a name
+you would be happy to see in a customer's org in ten years: <code>opskit</code>, not <code>test01</code>.</p></div>
+
+<h3>4. How do I create the 1GP managed package?</h3>
+<p>In the same org: <b>Setup &rarr; Package Manager &rarr; Packages &rarr; New</b>. Give it a name and a
+description, and tick <b>Managed</b>. (Until the namespace is registered, the Managed option is not
+available.) There is no supported CLI command to create a 1GP package &mdash; it is a UI action.
+<span class="badge b-doc">Documented</span></p>
+
+<h3>5. Where do I create metadata?</h3>
+<p>Two legitimate models:</p>
+<ul>
+<li><b>Develop-in-the-packaging-org</b> (classic). You build objects/classes directly in the org, then
+retrieve them into Git for backup. Simple, and how many legacy products ran for years.</li>
+<li><b>Develop-elsewhere, deploy-in</b> (better). You develop in a scratch/DE org from Git and deploy
+into the packaging org before uploading. This is what the course does.</li>
+</ul>
+
+<h3>6. Where does the source of truth live?</h3>
+<p><b>The packaging org.</b> Whatever is in it (and added to the package) is what ships. Git is a
+<i>copy</i>, and a copy can silently drift &mdash; someone edits a field in the packaging org UI and Git never
+learns. That drift is the defining pain of 1GP.</p>
+
+<h3>7. How do I connect my local project to the packaging org?</h3>
+<div class="codewrap"><div class="codebar"><span>bash</span><button class="copy" type="button">Copy</button></div><pre class="code"><code>cd sample-project/1gp
+sf org login web --alias pkgorg           # the DE org that owns the namespace
+sf org display --target-org pkgorg
+sf project deploy start --source-dir force-app --target-org pkgorg</code></pre></div>
+<p><b>What that deploy does:</b> the CLI zips your metadata, calls the <b>Metadata API</b>
+<code>deploy()</code>, and the org compiles/creates the components. Because the org has a namespace, the
+components become <code>opskit__Service_Request__c</code> and so on <b>inside the org</b> &mdash; your local files
+stay unprefixed. That asymmetry is normal and correct.</p>
+
+<h3>8. How do I add components to the package?</h3>
+<p><b>Setup &rarr; Package Manager &rarr; Packages &rarr; <i>your package</i> &rarr; Add Components</b>. Choose a
+component type, tick the components, click Add. Salesforce then pulls in <b>dependent components
+automatically</b> (adding an Apex class adds what it references; adding an object adds its fields).</p>
+<div class="warn"><p><b>The classic 1GP bug:</b> you deploy a new field, forget to <i>add</i> it to the
+package, upload, and the customer's install is missing a field your code references. Always re-open the
+package's component list before uploading and compare it against what you deployed. The
+<b>View Dependencies</b> button on the upload screen is your friend.</p></div>
+
+<h3>9. How do I create a package version?</h3>
+<p>UI: <b>Package Manager &rarr; your package &rarr; Upload</b>. Give it a Version Name
+(&ldquo;Winter Release&rdquo;), Version Number (1.0), optionally a password (installation key), and choose
+<b>Managed &mdash; Beta</b> or <b>Managed &mdash; Released</b>. CLI equivalent:</p>
+<div class="codewrap"><div class="codebar"><span>bash</span><button class="copy" type="button">Copy</button></div><pre class="code"><code># Uploads (creates a version of) an existing 1GP package.
+sf package1 version create \
+  --package-id 033xx0000004Cxx \
+  --name &quot;Winter Release&quot; \
+  --version &quot;1.0&quot; \
+  --managed-released \        # omit this flag to produce a BETA
+  --installation-key &quot;LearnPackaging123&quot; \
+  --wait 20
+
+# Watch / list
+sf package1 version create get --request-id 0HDxx...      # status of the upload request
+sf package1 version list --package-id 033xx0000004Cxx     # all versions, with their 04t IDs</code></pre></div>
+<p><b>Which org:</b> the packaging org (<code>--target-org pkgorg</code>). <b>Which API:</b> the Tooling API
+<code>PackageUploadRequest</code> object &mdash; the CLI inserts a record and polls it.
+<span class="badge b-doc">Documented</span> <b>What you get:</b> a <code>04t</code> subscriber package
+version ID and an install URL.</p>
+
+<h3>10. How does Salesforce determine what is inside the package?</h3>
+<p>By reading the package's component list <b>in the packaging org at upload time</b>, plus everything
+those components depend on. There is no manifest in your repo; there is no build from source. The org's
+current state <i>is</i> the input. <span class="badge b-inf">Inference</span> This is precisely why 1GP
+cannot support parallel feature branches: an org has one state at a time.</p>
+
+<h3>11. What is the package version ID?</h3>
+<p>The <code>04t...</code> (<code>SubscriberPackageVersion</code>) ID minted by the upload. It is what goes in an
+install URL: <code>https://login.salesforce.com/packaging/installPackage.apexp?p0=04t...</code>. The
+<code>033...</code> ID identifies the <i>package</i>; customers never need it.</p>
+
+<h3>12. What is a beta package?</h3>
+<p>An upload marked <b>Managed &mdash; Beta</b>. Installable only in scratch orgs, sandboxes, DE orgs and
+Trialforce source orgs &mdash; <b>never production</b>. Not upgradeable: a beta cannot be upgraded to a later
+version, and no customer can upgrade from it. Use betas freely; that is what they are for.</p>
+
+<h3>13. What is a released package?</h3>
+<p><b>Managed &mdash; Released.</b> Installable anywhere, permanently part of your upgrade lineage,
+<b>undeletable and unmodifiable</b>. After your first released version, your namespace, package name,
+global API surface and object schema are commitments.</p>
+
+<h3>14. What changes are allowed after release?</h3>
+<div class="tablewrap">
+<table>
+<thead><tr><th>Change</th><th>Allowed?</th><th>Notes</th></tr></thead>
+<tbody>
+<tr><td>Add a new component (object, field, class, LWC)</td><td>✔</td><td>The normal way to grow</td></tr>
+<tr><td>Add a method to an existing <code>global</code> class</td><td>✔</td><td>Adding is fine</td></tr>
+<tr><td>Change <code>public</code> Apex freely</td><td>✔</td><td>Invisible to subscribers</td></tr>
+<tr><td>Add a picklist value</td><td>✔</td><td>But see &ldquo;restricted picklist&rdquo; caveats on upgrade</td></tr>
+<tr><td>Change a field label / help text</td><td>✔</td><td>Cosmetic</td></tr>
+<tr><td>Change component <i>behaviour</i></td><td>✔</td><td>Your job is to not break customers</td></tr>
+<tr><td>Deprecate a <code>global</code> method (<code>@Deprecated</code>)</td><td>✔</td><td>It still exists, just hidden from new code</td></tr>
+</tbody>
+</table>
+</div>
+
+<h3>15. What cannot be changed?</h3>
+<div class="tablewrap">
+<table>
+<thead><tr><th>Change</th><th>Allowed?</th><th>Why</th></tr></thead>
+<tbody>
+<tr><td>Remove or rename a <code>global</code> Apex method/class/interface</td><td>✘</td><td>Subscriber and partner code may call it</td></tr>
+<tr><td>Change a <code>global</code> method signature or return type</td><td>✘</td><td>Same reason</td></tr>
+<tr><td>Make <code>global</code> &rarr; <code>public</code></td><td>✘</td><td>Reducing visibility breaks callers</td></tr>
+<tr><td>Delete a released custom object or field</td><td>✘ (effectively)</td><td>Subscriber <b>data</b> lives in it. You deprecate, you do not delete</td></tr>
+<tr><td>Change a field's data type / length downward</td><td>✘ mostly</td><td>Existing data would be invalidated</td></tr>
+<tr><td>Change the namespace</td><td>✘</td><td>Everything is prefixed with it</td></tr>
+<tr><td>Delete or replace a released version</td><td>✘</td><td>Customers may be running it</td></tr>
+<tr><td>Un-release a version</td><td>✘</td><td>&mdash;</td></tr>
+</tbody>
+</table>
+</div>
+<p><span class="badge b-unk">Verify</span> The precise list of &ldquo;allowed changes to released managed
+components&rdquo; is long and version-specific. Before any risky change, check the current
+<b>&ldquo;Editing Components After Release&rdquo;</b> table in the packaging docs. When in doubt, test the upgrade
+in a scratch org that has the older version installed &mdash; that test is the ground truth.</p>
+
+<h3>16. How does package upgrade work?</h3>
+<p>The subscriber installs a newer <code>04t</code> of the <b>same package</b>. Salesforce diffs the installed
+version against the new one and applies additions/changes to <b>metadata only</b>; the subscriber's
+<b>data is untouched</b>. Components you removed from the package are <b>not</b> deleted from the subscriber
+org &mdash; they are simply no longer upgraded (they linger). Upgrades are transactional at the platform
+level: if it fails, it rolls back. Detail: <a href="12-install.html">Part 12</a>.</p>
+
+<h3>17. How do patches work?</h3>
+<p><span class="badge b-1gp">1GP</span> A patch is a version that changes only the <b>third</b> digit
+(1.2 &rarr; 1.2.1) and may contain only a restricted set of changes &mdash; bug fixes, not new schema.
+Mechanically:</p>
+<ol class="steps">
+<li>In the packaging org: <b>Package Manager &rarr; Patch Organizations &rarr; New</b>, choosing the released
+version you want to patch. Salesforce creates a <b>patch development org</b> which is a copy of the
+packaging org at that version.</li>
+<li>You fix the bug in the <b>patch org</b> (deploy from Git).</li>
+<li>You upload from the patch org, producing 1.2.1.</li>
+<li>The fix must also be merged forward into the main packaging org, or your next major release regresses it.</li>
+</ol>
+<div class="warn"><p>That last step is manual and is exactly the kind of thing 1GP shops get wrong.
+<span class="badge b-unk">Verify</span> the current restrictions on what a patch may contain &mdash; they are
+tighter than most people assume (for example, new components are generally not allowed).</p></div>
+
+<h3>18. What happens when a customer installs the package?</h3>
+<p>Summarised here, detailed in <a href="12-install.html">Part 12</a>: Salesforce validates the version,
+resolves dependencies, shows the component list and the security/access choice, then creates all
+components in the subscriber org under your namespace, runs your <code>InstallHandler</code>
+(post-install script) if you have one, and records the install against your LMA.</p>
+
+<h3>19. How does namespace isolation work?</h3>
+<ul>
+<li>Every packaged component gets the prefix: <code>opskit__Service_Request__c</code>,
+<code>opskit.ServiceRequestService</code>, label <code>opskit__Ops_Request_Created</code>.</li>
+<li>Your Apex executes in <b>your namespace context</b>: unqualified references inside your code resolve
+to your components first, so a subscriber's <code>Status__c</code> cannot shadow yours.</li>
+<li>Subscribers cannot view or edit your Apex (unless it is a global interface they implement).</li>
+<li>Some limits are tracked <b>per namespace</b> <span class="badge b-inf">Inference</span> &mdash; a well-known
+example is that your packaged Apex gets its own SOQL/DML governor allocation separate from the
+subscriber's code in many contexts. <span class="badge b-unk">Verify</span> the exact behaviour before
+you design around it.</li>
+<li>Dynamic code is where isolation leaks: <code>Database.query('SELECT ... FROM Service_Request__c')</code>
+resolves fine inside your namespace, but a hard-coded <code>'opskit__Service_Request__c'</code> string in a
+non-namespaced context, or a subscriber-supplied field name, will bite you. Test in a real install.</li>
+</ul>
+
+<h2>1GP mental model, in one diagram</h2>
+<pre class="diagram">  Your laptop / Git                  PACKAGING ORG (DE, namespace = opskit)
+  ─────────────────                  ────────────────────────────────────────
+  force-app/**  ──deploy──►  components exist in the org (opskit__ prefixed)
+                                          │
+                                          │  you tick them in
+                                          ▼
+                                   PACKAGE  (033…)  = a component LIST
+                                          │
+                                          │  Upload (UI) / sf package1 version create
+                                          ▼
+                              PACKAGE VERSION (04t…)  ── beta or released
+                                          │
+                                          ▼
+                              install URL → any org</pre>
+<div class="why"><p><b>The thing to internalise:</b> the package is a <b>list of components in an org</b>,
+and a version is a <b>snapshot of that org</b>. Nothing about your Git history is visible to Salesforce.
+When we get to 2GP, the package becomes <b>a folder in your repo</b> and the version becomes <b>a build of
+your source</b>. Everything else follows.</p></div>
+
+<h2>Common errors on this page's commands</h2>
+<div class="tablewrap">
+<table>
+<thead><tr><th>Error</th><th>Cause</th><th>Fix</th></tr></thead>
+<tbody>
+<tr><td><code>The Managed option is unavailable</code> when creating a package</td><td>No namespace registered in that org</td><td>Register the namespace first (Q3)</td></tr>
+<tr><td><code>You can't upload a managed package until you register a namespace</code></td><td>Same</td><td>Same</td></tr>
+<tr><td>Upload fails: <code>Average test coverage across all Apex classes is XX%, at least 75% is required</code></td><td>Managed-Released uploads run all tests</td><td>Add tests; check per-class coverage too (each class needs some coverage)</td></tr>
+<tr><td><code>INVALID_CROSS_REFERENCE_KEY</code> on deploy</td><td>Component references something not in the org</td><td>Deploy dependencies first, or deploy the whole source dir at once</td></tr>
+<tr><td>Install fails with <code>Missing dependent object</code></td><td>Component not added to the package</td><td>Add Components in the packaging org, upload a new version</td></tr>
+<tr><td><code>Cannot upload a new version while another upload is in progress</code></td><td>Concurrent uploads</td><td>Wait; check Package Manager &rarr; Versions</td></tr>
+</tbody>
+</table>
+</div>
+
+  <nav class="pager"><a class="prev" href="04-the-app.html"><span>Previous</span>4 &middot; The app</a><a class="next" href="06-1gp-lifecycle.html"><span>Next</span>6 &middot; 1GP lifecycle</a></nav>
+  <footer class="sitefoot">
+    <p>Built as a personal learning course. Salesforce behaviour changes between releases &mdash;
+    always confirm against <a href="https://developer.salesforce.com/docs/atlas.en-us.sfdx_dev.meta/sfdx_dev/">Salesforce DX Developer Guide</a>
+    and the <a href="https://developer.salesforce.com/docs/atlas.en-us.packagingGuide.meta/packagingGuide/">ISVforce / Packaging guides</a>
+    before you rely on a detail in production.</p>
+  </footer>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

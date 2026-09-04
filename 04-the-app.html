@@ -1,0 +1,707 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Build the Application First &middot; AppExchange From Zero</title>
+<link rel="stylesheet" href="assets/site.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<button class="navtoggle" aria-label="Toggle navigation">&#9776; Contents</button>
+<div class="shell">
+<nav class="sidenav" id="sidenav">
+  <div class="brand">
+    <span class="brand-mark">SF</span>
+    <span class="brand-text">AppExchange<br><b>From Zero</b></span>
+  </div>
+  <ol class="navlist">
+    <li><a href="index.html">Start here</a></li>
+    <li><a href="01-big-picture.html">1 &middot; Big picture</a></li>
+    <li><a href="02-orgs.html">2 &middot; Org architecture</a></li>
+    <li><a href="03-prereqs.html">3 &middot; Prerequisites</a></li>
+    <li class="here"><a href="04-the-app.html">4 &middot; The app</a></li>
+    <li><a href="05-1gp.html">5 &middot; 1GP concepts</a></li>
+    <li><a href="06-1gp-lifecycle.html">6 &middot; 1GP lifecycle</a></li>
+    <li><a href="07-2gp.html">7 &middot; 2GP concepts</a></li>
+    <li><a href="08-2gp-build.html">8 &middot; 2GP build</a></li>
+    <li><a href="09-scratch-orgs.html">9 &middot; Scratch orgs</a></li>
+    <li><a href="10-compare.html">10 &middot; 1GP vs 2GP</a></li>
+    <li><a href="11-dependencies.html">11 &middot; Dependencies</a></li>
+    <li><a href="12-install.html">12 &middot; Install &amp; upgrade</a></li>
+    <li><a href="13-security.html">13 &middot; Security Review</a></li>
+    <li><a href="14-cicd.html">14 &middot; CI/CD</a></li>
+    <li><a href="15-appexchange.html">15 &middot; AppExchange</a></li>
+    <li><a href="16-day-plan.html">16 &middot; Day-by-day plan</a></li>
+    <li><a href="17-debugging.html">17 &middot; Debug drills</a></li>
+    <li><a href="17b-error-index.html">17b &middot; Error index</a></li>
+    <li><a href="18-backend.html">18 &middot; Behind the scenes</a></li>
+    <li><a href="19-commands.html">19 &middot; Command cheat sheet</a></li>
+    <li><a href="20-quiz.html">20 &middot; Knowledge test</a></li>
+  </ol>
+  <div class="navfoot">
+    <p>Local course site.<br>Regenerate with <code>python3 build.py</code></p>
+  </div>
+</nav>
+<main id="main">
+  <header class="pagehead">
+    <p class="kicker">Part 4</p>
+    <h1>Build the Application First</h1>
+  </header>
+  <p class="lead">You cannot learn packaging with a Hello World. Packaging problems only appear when you
+have an object customers store data in, Apex customers cannot edit, a UI that carries your namespace,
+permissions you must ship, and configuration customers are allowed to change. So we build that first.</p>
+
+<div class="note"><p><b>Everything on this page already exists on disk</b>, in
+<code>sample-project/</code> next to this site. The code blocks below are read directly from those files,
+so what you see is what you deploy.</p></div>
+
+<h2>The product: &ldquo;Ops Toolkit&rdquo;</h2>
+<p>A field-operations add-on. A customer's dispatcher raises <b>Service Requests</b> against an Account,
+the system applies an <b>SLA</b> to compute a due date, and a console lets a field lead see what is open
+and close it out.</p>
+<p>It ships as <b>two 2GP packages</b> plus <b>one 1GP package</b> used purely for the legacy exercise:</p>
+<div class="tablewrap">
+<table>
+<thead><tr><th>Package</th><th>Generation</th><th>Contains</th><th>Depends on</th></tr></thead>
+<tbody>
+<tr><td><b>Ops Toolkit Core</b></td><td>2GP</td><td>Service_Request__c + fields, validation rule, list view, Ops_Setting__mdt + a record, custom labels, tab, <code>ServiceRequestService</code>, <code>ServiceRequestSelector</code>, <code>OpsSettings</code>, tests, permission set</td><td>&mdash;</td></tr>
+<tr><td><b>Ops Toolkit Field Ops</b></td><td>2GP</td><td><code>serviceRequestConsole</code> LWC, <code>ServiceRequestConsoleController</code>, Lightning app, flow, permission set</td><td><b>Ops Toolkit Core</b></td></tr>
+<tr><td><b>Ops Toolkit Core (1GP)</b></td><td>1GP</td><td>The same core metadata, deployed into a 1GP packaging org</td><td>&mdash;</td></tr>
+</tbody>
+</table>
+</div>
+
+<h2>Why each component type is in the build</h2>
+<div class="tablewrap">
+<table>
+<thead><tr><th>Component</th><th>Why it exists in this app</th><th>What it teaches you about packaging</th></tr></thead>
+<tbody>
+<tr><td><b>Custom object</b> <code>Service_Request__c</code></td><td>Somewhere to store requests</td><td>The hardest thing to change after release. Object/field API names and field <i>types</i> are effectively permanent</td></tr>
+<tr><td><b>Custom fields</b> (text, picklist, date, lookup, formula)</td><td>Real data shape</td><td>Restricted picklists, <code>required</code> flags and formula fields all behave differently on upgrade &mdash; see <a href="12-install.html">upgrades</a></td></tr>
+<tr><td><b>Validation rule</b></td><td>Stop nonsense dates</td><td>Packaged rules fire in the subscriber org and can break <i>their</i> data loads. Deliberately conservative</td></tr>
+<tr><td><b>List view</b></td><td>Usable out of the box</td><td>Ships once; subscribers can then edit their copy</td></tr>
+<tr><td><b>Custom Metadata Type</b> <code>Ops_Setting__mdt</code> + record</td><td>SLA days &amp; default priority</td><td>The correct way to ship <b>configuration with defaults</b> that survives upgrades and that admins may change</td></tr>
+<tr><td><b>Custom labels</b></td><td>All UI strings</td><td>Translation, and changing wording without changing code &mdash; and labels are namespaced too</td></tr>
+<tr><td><b>Apex service + selector</b></td><td>Business logic and all SOQL</td><td><code>global</code> vs <code>public</code> is an <b>irreversible API decision</b>; selectors are where Security Review looks first</td></tr>
+<tr><td><b>Apex tests</b></td><td>Prove behaviour</td><td><b>75% coverage is a hard gate</b> for releasing a managed version, and tests run again inside subscriber orgs in some flows</td></tr>
+<tr><td><b>LWC</b> <code>serviceRequestConsole</code></td><td>The UI</td><td>Namespacing of components, labels and Apex imports; <code>@AuraEnabled</code> methods are part of your public surface</td></tr>
+<tr><td><b>Lightning app + tab</b></td><td>Somewhere to click</td><td>Apps/tabs must be granted by <i>your</i> permission set &mdash; subscriber profiles are not yours to edit</td></tr>
+<tr><td><b>Permission sets</b> (two)</td><td>Grant access to everything above</td><td><b>The single most common install failure</b>: package installs fine, nobody can see anything, because access was assumed from a profile</td></tr>
+<tr><td><b>Record-triggered flow</b></td><td>Default the due date</td><td>Subscribers cannot edit packaged flows &mdash; a real constraint on where you put logic</td></tr>
+<tr><td><b>Second package (Field Ops)</b></td><td>The console</td><td>The whole point of <a href="11-dependencies.html">Part 11</a>: a real, compile-time dependency</td></tr>
+</tbody>
+</table>
+</div>
+
+<h2>Project structure</h2>
+<pre class="diagram">sample-project/
+├── sfdx-project.json                  ← THE definition of your 2GP packages (source of truth)
+├── .gitignore                         ← must exclude .sf/ .sfdx/ *.key
+├── config/
+│   ├── project-scratch-def.json       ← shape of a DEV scratch org (namespaced)
+│   └── customer-like-scratch-def.json ← shape of an INSTALL-TEST org (Enterprise, sample data)
+├── scripts/
+│   ├── create-dev-org.sh              ← create org + push + permsets + seed data
+│   ├── create-install-test-org.sh     ← create clean org + install a 04t like a customer
+│   ├── build-versions.sh              ← create beta versions in dependency order
+│   └── apex/seed-data.apex            ← sample data, never packaged
+├── packages/
+│   ├── core/main/default/             ← PACKAGE 1 (&quot;Ops Toolkit Core&quot;)
+│   │   ├── classes/                   ← OpsSettings, ServiceRequestService, Selector, tests
+│   │   ├── objects/
+│   │   │   ├── Service_Request__c/    ← object + fields + validationRules + listViews
+│   │   │   └── Ops_Setting__mdt/      ← the Custom Metadata TYPE (schema)
+│   │   ├── customMetadata/            ← the Custom Metadata RECORD (data that ships)
+│   │   ├── labels/                    ← CustomLabels.labels-meta.xml (one file, many labels)
+│   │   ├── permissionsets/            ← Ops_Core_User
+│   │   └── tabs/                      ← Service_Request__c tab
+│   └── field-ops/main/default/        ← PACKAGE 2 (&quot;Ops Toolkit Field Ops&quot;)
+│       ├── applications/              ← Ops_Toolkit Lightning app
+│       ├── classes/                   ← ServiceRequestConsoleController + test
+│       ├── flows/                     ← built in Flow Builder, retrieved here
+│       ├── lwc/serviceRequestConsole/ ← html + js + js-meta.xml
+│       └── permissionsets/            ← Ops_Field_Ops_User
+└── 1gp/                               ← the SAME core app, prepared for a 1GP packaging org
+    ├── sfdx-project.json              ← note: NO namespace key (the org owns the namespace)
+    └── force-app/main/default/</pre>
+
+<h3>What each directory is, precisely</h3>
+<ul>
+<li><b><code>packages/&lt;name&gt;/</code></b> &mdash; a <i>package directory</i>. In 2GP, the boundary of a package is
+literally &ldquo;the files under this path&rdquo;. Move a file between these folders and you have moved it between
+packages. That is why the folder layout is an architectural decision, not cosmetics.</li>
+<li><b><code>main/default/</code></b> &mdash; convention inherited from the DX default project. Nothing magic; it
+keeps room for other bundles (<code>main/test/</code>) later.</li>
+<li><b><code>config/*.json</code></b> &mdash; scratch org <i>definition</i> files. Not packaged. They describe the org you
+want the Dev Hub to build.</li>
+<li><b><code>scripts/</code></b> &mdash; not packaged. Your local automation. Everything here should also be runnable by CI.</li>
+<li><b><code>sfdx-project.json</code></b> &mdash; the most important file in a 2GP repo. Package names, versions,
+dependencies, namespace, and the auto-maintained <code>packageAliases</code> map from friendly names to
+<code>0Ho</code>/<code>04t</code> IDs. <b>Always commit it after creating a version.</b></li>
+</ul>
+
+<h2>The files that matter</h2>
+
+<h3>sfdx-project.json</h3>
+<div class="codewrap"><div class="codebar"><span>sample-project/sfdx-project.json</span><button class="copy" type="button">Copy</button></div><pre class="code"><code>{
+  &quot;packageDirectories&quot;: [
+    {
+      &quot;path&quot;: &quot;packages/core&quot;,
+      &quot;package&quot;: &quot;Ops Toolkit Core&quot;,
+      &quot;versionName&quot;: &quot;Spring Release&quot;,
+      &quot;versionNumber&quot;: &quot;1.0.0.NEXT&quot;,
+      &quot;versionDescription&quot;: &quot;Core objects, settings and services for the Ops Toolkit&quot;,
+      &quot;default&quot;: true
+    },
+    {
+      &quot;path&quot;: &quot;packages/field-ops&quot;,
+      &quot;package&quot;: &quot;Ops Toolkit Field Ops&quot;,
+      &quot;versionName&quot;: &quot;Spring Release&quot;,
+      &quot;versionNumber&quot;: &quot;1.0.0.NEXT&quot;,
+      &quot;versionDescription&quot;: &quot;Field operations console built on Ops Toolkit Core&quot;,
+      &quot;default&quot;: false,
+      &quot;dependencies&quot;: [
+        { &quot;package&quot;: &quot;Ops Toolkit Core&quot;, &quot;versionNumber&quot;: &quot;1.0.0.LATEST&quot; }
+      ]
+    }
+  ],
+  &quot;namespace&quot;: &quot;opskit&quot;,
+  &quot;sfdcLoginUrl&quot;: &quot;https://login.salesforce.com&quot;,
+  &quot;sourceApiVersion&quot;: &quot;62.0&quot;,
+  &quot;packageAliases&quot;: {}
+}</code></pre></div>
+<div class="tablewrap">
+<table>
+<thead><tr><th>Key</th><th>Meaning</th></tr></thead>
+<tbody>
+<tr><td><code>path</code></td><td>The folder whose contents form this package</td></tr>
+<tr><td><code>package</code></td><td>Friendly name. On first <code>sf package create</code> this gets an alias mapping to a <code>0Ho</code> ID</td></tr>
+<tr><td><code>versionNumber</code></td><td><code>major.minor.patch.NEXT</code> &mdash; <code>NEXT</code> lets the build auto-increment the build number</td></tr>
+<tr><td><code>versionName</code></td><td>Human label shown in the subscriber's installed-packages list</td></tr>
+<tr><td><code>dependencies</code></td><td>Other packages that must be installed first. <code>LATEST</code> resolves at build time</td></tr>
+<tr><td><code>namespace</code></td><td>Applies to <b>all</b> packages in this project, and makes scratch orgs namespaced by default</td></tr>
+<tr><td><code>packageAliases</code></td><td>Auto-written by the CLI: name &rarr; <code>0Ho</code>, and <code>Name@1.0.0-1</code> &rarr; <code>04t</code></td></tr>
+</tbody>
+</table>
+</div>
+
+<h3>The object</h3>
+<div class="codewrap"><div class="codebar"><span>sample-project/packages/core/main/default/objects/Service_Request__c/Service_Request__c.object-meta.xml</span><button class="copy" type="button">Copy</button></div><pre class="code"><code>&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;
+&lt;CustomObject xmlns=&quot;http://soap.sforce.com/2006/04/metadata&quot;&gt;
+    &lt;deploymentStatus&gt;Deployed&lt;/deploymentStatus&gt;
+    &lt;description&gt;A request for field service work raised by an account contact.&lt;/description&gt;
+    &lt;enableActivities&gt;true&lt;/enableActivities&gt;
+    &lt;enableHistory&gt;true&lt;/enableHistory&gt;
+    &lt;enableReports&gt;true&lt;/enableReports&gt;
+    &lt;enableSearch&gt;true&lt;/enableSearch&gt;
+    &lt;label&gt;Service Request&lt;/label&gt;
+    &lt;nameField&gt;
+        &lt;displayFormat&gt;SR-{00000}&lt;/displayFormat&gt;
+        &lt;label&gt;Service Request Number&lt;/label&gt;
+        &lt;type&gt;AutoNumber&lt;/type&gt;
+    &lt;/nameField&gt;
+    &lt;pluralLabel&gt;Service Requests&lt;/pluralLabel&gt;
+    &lt;sharingModel&gt;ReadWrite&lt;/sharingModel&gt;
+    &lt;visibility&gt;Public&lt;/visibility&gt;
+&lt;/CustomObject&gt;</code></pre></div>
+<div class="warn"><p><b>Decisions here are close to permanent.</b> <code>sharingModel</code> (the OWD),
+the auto-number format, the API name, and the field types below can be extremely difficult or impossible
+to change after a released version ships. Think about them now, not in version 1.3.</p></div>
+
+<h3>Configuration that ships and can be changed by admins</h3>
+<div class="codewrap"><div class="codebar"><span>sample-project/packages/core/main/default/customMetadata/Ops_Setting.Default.md-meta.xml</span><button class="copy" type="button">Copy</button></div><pre class="code"><code>&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;
+&lt;CustomMetadata xmlns=&quot;http://soap.sforce.com/2006/04/metadata&quot; label=&quot;Default&quot;&gt;
+    &lt;values&gt;
+        &lt;field&gt;SLA_Days__c&lt;/field&gt;
+        &lt;value xsi:type=&quot;xsd:double&quot; xmlns:xsi=&quot;http://www.w3.org/2001/XMLSchema-instance&quot;&gt;5.0&lt;/value&gt;
+    &lt;/values&gt;
+    &lt;values&gt;
+        &lt;field&gt;Default_Priority__c&lt;/field&gt;
+        &lt;value xsi:type=&quot;xsd:string&quot; xmlns:xsi=&quot;http://www.w3.org/2001/XMLSchema-instance&quot;&gt;Medium&lt;/value&gt;
+    &lt;/values&gt;
+&lt;/CustomMetadata&gt;</code></pre></div>
+<p>This is a <b>record</b>, packaged alongside its <b>type</b>. It gives every subscriber a working default
+on install, and the subscriber can edit the values without you shipping anything.
+<span class="badge b-doc">Documented</span> Whether a later package version overwrites subscriber edits
+depends on the field's/record's <b>protected</b> setting and how you deploy it &mdash; see
+<a href="12-install.html">upgrade behaviour</a>.</p>
+
+<h3>Business logic &mdash; and your first irreversible API decision</h3>
+<div class="codewrap"><div class="codebar"><span>sample-project/packages/core/main/default/classes/ServiceRequestService.cls</span><button class="copy" type="button">Copy</button></div><pre class="code"><code>/**
+ * Business logic for service requests. This is the class other packages call,
+ * so its global surface is an API contract that must live forever.
+ */
+global with sharing class ServiceRequestService {
+
+    global class ServiceRequestException extends Exception {}
+
+    /** Simple DTO so callers (LWC, other packages) never depend on our SObject shape. */
+    global class RequestInput {
+        global String summary;
+        global String priority;
+        global Id accountId;
+        global Date dueDate;
+    }
+
+    global static Id createRequest(RequestInput input) {
+        if (input == null || String.isBlank(input.summary)) {
+            throw new ServiceRequestException(Label.Ops_Summary_Required);
+        }
+        Service_Request__c sr = new Service_Request__c(
+            Summary__c      = input.summary.trim(),
+            Priority__c     = String.isBlank(input.priority) ? OpsSettings.defaultPriority() : input.priority,
+            Status__c       = &#x27;New&#x27;,
+            Account__c      = input.accountId,
+            Requested_On__c = Date.today(),
+            Due_Date__c     = input.dueDate != null ? input.dueDate : Date.today().addDays(OpsSettings.slaDays())
+        );
+        // USER_MODE makes the platform enforce CRUD + FLS on the DML for us.
+        Database.SaveResult result = Database.insert(sr, true, AccessLevel.USER_MODE);
+        return result.getId();
+    }
+
+    global static void complete(Set&lt;Id&gt; requestIds) {
+        if (requestIds == null || requestIds.isEmpty()) {
+            return;
+        }
+        List&lt;Service_Request__c&gt; toUpdate = new List&lt;Service_Request__c&gt;();
+        for (Id requestId : requestIds) {
+            toUpdate.add(new Service_Request__c(Id = requestId, Status__c = &#x27;Completed&#x27;));
+        }
+        Database.update(toUpdate, true, AccessLevel.USER_MODE);
+    }
+
+    /** Convenience for other packages: is the running user able to use this app at all? */
+    global static Boolean currentUserCanUse() {
+        return Schema.SObjectType.Service_Request__c.isAccessible()
+            &amp;&amp; Schema.SObjectType.Service_Request__c.isCreateable();
+    }
+}</code></pre></div>
+<div class="stop">
+<p><b>Read the <code>global</code> keywords again.</b> In a managed package:</p>
+<ul>
+<li><code>public</code> = visible only inside your namespace. You can change it freely forever.</li>
+<li><code>global</code> = visible to subscribers and other packages. <b>Once released you can never change
+its signature, never remove it, and never make it less visible.</b> You can only add.</li>
+</ul>
+<p>Beginners mark everything <code>global</code> &ldquo;to be safe&rdquo;. That is the opposite of safe: it freezes your
+internals forever. Mark <code>global</code> only what is genuinely an API.</p>
+</div>
+
+<h3>All SOQL in one place</h3>
+<div class="codewrap"><div class="codebar"><span>sample-project/packages/core/main/default/classes/ServiceRequestSelector.cls</span><button class="copy" type="button">Copy</button></div><pre class="code"><code>/**
+ * All SOQL for Service_Request__c lives here.
+ *
+ * Security notes that matter for the AppExchange Security Review:
+ *  - `with sharing` so record-level sharing of the SUBSCRIBER org is respected.
+ *  - `WITH USER_MODE` makes the platform enforce object and field level security
+ *    on the query itself, so a user without FLS on Due_Date__c gets an error
+ *    rather than silently reading data they should not see.
+ *  - Bind variables (:accountId) instead of string concatenation: no SOQL injection.
+ */
+public with sharing class ServiceRequestSelector {
+
+    private static final Set&lt;String&gt; SORTABLE = new Set&lt;String&gt;{
+        &#x27;Name&#x27;, &#x27;Status__c&#x27;, &#x27;Priority__c&#x27;, &#x27;Due_Date__c&#x27;, &#x27;Requested_On__c&#x27;
+    };
+
+    public List&lt;Service_Request__c&gt; openRequests(Integer maxRows) {
+        Integer safeLimit = maxRows == null || maxRows &lt;= 0 || maxRows &gt; 200 ? 50 : maxRows;
+        return [
+            SELECT Id, Name, Summary__c, Status__c, Priority__c,
+                   Due_Date__c, Requested_On__c, Is_Overdue__c,
+                   Account__c, Account__r.Name
+            FROM Service_Request__c
+            WHERE Status__c NOT IN (&#x27;Completed&#x27;, &#x27;Cancelled&#x27;)
+            WITH USER_MODE
+            ORDER BY Due_Date__c ASC NULLS LAST
+            LIMIT :safeLimit
+        ];
+    }
+
+    public List&lt;Service_Request__c&gt; byAccount(Id accountId) {
+        return [
+            SELECT Id, Name, Summary__c, Status__c, Priority__c, Due_Date__c
+            FROM Service_Request__c
+            WHERE Account__c = :accountId
+            WITH USER_MODE
+            ORDER BY Requested_On__c DESC
+            LIMIT 200
+        ];
+    }
+
+    /**
+     * Dynamic sorting done safely: the ORDER BY column is validated against an
+     * allow-list, never taken from user input directly. String.escapeSingleQuotes
+     * alone does NOT protect an ORDER BY clause.
+     */
+    public List&lt;Service_Request__c&gt; openRequestsSorted(String sortField, Boolean ascending) {
+        String field = SORTABLE.contains(sortField) ? sortField : &#x27;Due_Date__c&#x27;;
+        String direction = ascending == false ? &#x27;DESC&#x27; : &#x27;ASC&#x27;;
+        String soql =
+            &#x27;SELECT Id, Name, Summary__c, Status__c, Priority__c, Due_Date__c &#x27; +
+            &#x27;FROM Service_Request__c &#x27; +
+            &#x27;WHERE Status__c NOT IN (\&#x27;Completed\&#x27;, \&#x27;Cancelled\&#x27;) &#x27; +
+            &#x27;ORDER BY &#x27; + field + &#x27; &#x27; + direction + &#x27; NULLS LAST LIMIT 200&#x27;;
+        return Database.query(soql, AccessLevel.USER_MODE);
+    }
+}</code></pre></div>
+<p>Three Security-Review-relevant patterns are in that file: <code>with sharing</code>,
+<code>WITH USER_MODE</code> / <code>AccessLevel.USER_MODE</code>, and an <b>allow-list</b> for the dynamic
+<code>ORDER BY</code>. <a href="13-security.html">Part 13</a> makes you break and fix each one.</p>
+
+<h3>Tests &mdash; the thing that gates your release</h3>
+<div class="codewrap"><div class="codebar"><span>sample-project/packages/core/main/default/classes/ServiceRequestServiceTest.cls</span><button class="copy" type="button">Copy</button></div><pre class="code"><code>@IsTest
+private class ServiceRequestServiceTest {
+
+    @IsTest
+    static void createsRequestWithSlaDueDate() {
+        ServiceRequestService.RequestInput input = new ServiceRequestService.RequestInput();
+        input.summary = &#x27;Generator will not start&#x27;;
+
+        Test.startTest();
+        Id newId = ServiceRequestService.createRequest(input);
+        Test.stopTest();
+
+        Service_Request__c saved = [
+            SELECT Status__c, Priority__c, Due_Date__c, Requested_On__c
+            FROM Service_Request__c WHERE Id = :newId
+        ];
+        Assert.areEqual(&#x27;New&#x27;, saved.Status__c, &#x27;New requests start in New&#x27;);
+        Assert.areEqual(OpsSettings.defaultPriority(), saved.Priority__c, &#x27;Falls back to configured default priority&#x27;);
+        Assert.areEqual(Date.today().addDays(OpsSettings.slaDays()), saved.Due_Date__c, &#x27;Due date is derived from the SLA setting&#x27;);
+    }
+
+    @IsTest
+    static void rejectsBlankSummary() {
+        ServiceRequestService.RequestInput input = new ServiceRequestService.RequestInput();
+        input.summary = &#x27;   &#x27;;
+        try {
+            ServiceRequestService.createRequest(input);
+            Assert.fail(&#x27;Expected a ServiceRequestException&#x27;);
+        } catch (ServiceRequestService.ServiceRequestException e) {
+            Assert.areEqual(Label.Ops_Summary_Required, e.getMessage(), &#x27;User-facing message comes from a custom label&#x27;);
+        }
+    }
+
+    @IsTest
+    static void completeMarksRequestsCompleted() {
+        Service_Request__c sr = new Service_Request__c(
+            Summary__c = &#x27;Replace filter&#x27;, Status__c = &#x27;New&#x27;, Requested_On__c = Date.today()
+        );
+        insert sr;
+
+        Test.startTest();
+        ServiceRequestService.complete(new Set&lt;Id&gt;{ sr.Id });
+        Test.stopTest();
+
+        Assert.areEqual(&#x27;Completed&#x27;, [SELECT Status__c FROM Service_Request__c WHERE Id = :sr.Id].Status__c);
+    }
+
+    @IsTest
+    static void selectorReturnsOnlyOpenRequests() {
+        insert new List&lt;Service_Request__c&gt;{
+            new Service_Request__c(Summary__c = &#x27;Open one&#x27;,  Status__c = &#x27;New&#x27;,       Requested_On__c = Date.today()),
+            new Service_Request__c(Summary__c = &#x27;Closed one&#x27;, Status__c = &#x27;Completed&#x27;, Requested_On__c = Date.today())
+        };
+
+        List&lt;Service_Request__c&gt; open = new ServiceRequestSelector().openRequests(10);
+
+        Assert.areEqual(1, open.size(), &#x27;Completed requests must be excluded&#x27;);
+        Assert.areEqual(&#x27;Open one&#x27;, open[0].Summary__c);
+    }
+
+    @IsTest
+    static void sortFieldIsAllowListed() {
+        insert new Service_Request__c(Summary__c = &#x27;Sortable&#x27;, Status__c = &#x27;New&#x27;, Requested_On__c = Date.today());
+        // A hostile sort field must be ignored rather than injected into the query.
+        List&lt;Service_Request__c&gt; rows =
+            new ServiceRequestSelector().openRequestsSorted(&#x27;Name FROM Account WHERE Id != null--&#x27;, true);
+        Assert.areEqual(1, rows.size(), &#x27;Query still runs against Service_Request__c only&#x27;);
+    }
+
+    @IsTest
+    static void settingsFallBackWhenNoRecord() {
+        OpsSettings.overrideForTest = new Ops_Setting__mdt(SLA_Days__c = null, Default_Priority__c = null);
+        Assert.areEqual(5, OpsSettings.slaDays());
+        Assert.areEqual(&#x27;Medium&#x27;, OpsSettings.defaultPriority());
+    }
+}</code></pre></div>
+
+<h3>The dependent package's controller</h3>
+<div class="codewrap"><div class="codebar"><span>sample-project/packages/field-ops/main/default/classes/ServiceRequestConsoleController.cls</span><button class="copy" type="button">Copy</button></div><pre class="code"><code>/**
+ * Controller for the serviceRequestConsole LWC.
+ *
+ * This class lives in the FIELD OPS package and calls global classes that live in
+ * the CORE package. That single fact is what makes Field Ops depend on Core:
+ * Salesforce resolves `ServiceRequestService` at compile time when the Field Ops
+ * package version is built, and the version create fails if Core is not installed
+ * into the build environment - which only happens because we declared the
+ * dependency in sfdx-project.json.
+ */
+public with sharing class ServiceRequestConsoleController {
+
+    @AuraEnabled(cacheable=true)
+    public static List&lt;Service_Request__c&gt; getOpenRequests(Integer maxRows) {
+        try {
+            if (!ServiceRequestService.currentUserCanUse()) {
+                throw new AuraHandledException(Label.Ops_No_Access);
+            }
+            return new ServiceRequestSelector().openRequests(maxRows);
+        } catch (Exception e) {
+            // Never leak a raw stack trace to the UI of a subscriber org.
+            throw new AuraHandledException(e.getMessage());
+        }
+    }
+
+    @AuraEnabled
+    public static Id createRequest(String summary, String priority, Id accountId, Date dueDate) {
+        try {
+            ServiceRequestService.RequestInput input = new ServiceRequestService.RequestInput();
+            input.summary   = summary;
+            input.priority  = priority;
+            input.accountId = accountId;
+            input.dueDate   = dueDate;
+            return ServiceRequestService.createRequest(input);
+        } catch (Exception e) {
+            throw new AuraHandledException(e.getMessage());
+        }
+    }
+
+    @AuraEnabled
+    public static void completeRequests(List&lt;Id&gt; requestIds) {
+        try {
+            ServiceRequestService.complete(new Set&lt;Id&gt;(requestIds));
+        } catch (Exception e) {
+            throw new AuraHandledException(e.getMessage());
+        }
+    }
+}</code></pre></div>
+
+<h3>The LWC</h3>
+<div class="codewrap"><div class="codebar"><span>sample-project/packages/field-ops/main/default/lwc/serviceRequestConsole/serviceRequestConsole.js</span><button class="copy" type="button">Copy</button></div><pre class="code"><code>import { LightningElement, api, wire, track } from &#x27;lwc&#x27;;
+import { refreshApex } from &#x27;@salesforce/apex&#x27;;
+import { ShowToastEvent } from &#x27;lightning/platformShowToastEvent&#x27;;
+
+import getOpenRequests from &#x27;@salesforce/apex/ServiceRequestConsoleController.getOpenRequests&#x27;;
+import completeRequests from &#x27;@salesforce/apex/ServiceRequestConsoleController.completeRequests&#x27;;
+
+// Custom labels are namespaced automatically when the package is installed.
+import CREATED from &#x27;@salesforce/label/c.Ops_Request_Created&#x27;;
+
+const COLUMNS = [
+    { label: &#x27;Number&#x27;, fieldName: &#x27;Name&#x27;, initialWidth: 120 },
+    { label: &#x27;Summary&#x27;, fieldName: &#x27;Summary__c&#x27; },
+    { label: &#x27;Status&#x27;, fieldName: &#x27;Status__c&#x27;, initialWidth: 130 },
+    { label: &#x27;Priority&#x27;, fieldName: &#x27;Priority__c&#x27;, initialWidth: 110 },
+    { label: &#x27;Due&#x27;, fieldName: &#x27;Due_Date__c&#x27;, type: &#x27;date-local&#x27;, initialWidth: 120 }
+];
+
+export default class ServiceRequestConsole extends LightningElement {
+    @api maxRows = 50;
+
+    columns = COLUMNS;
+    @track rows = [];
+    errorMessage;
+    isLoading = true;
+    selectedIds = [];
+    wiredResult;
+
+    labels = { created: CREATED };
+
+    @wire(getOpenRequests, { maxRows: &#x27;$maxRows&#x27; })
+    handleWire(result) {
+        this.wiredResult = result;
+        const { data, error } = result;
+        if (data) {
+            this.rows = data;
+            this.errorMessage = undefined;
+        } else if (error) {
+            this.rows = [];
+            this.errorMessage = error?.body?.message ?? &#x27;Unexpected error&#x27;;
+        }
+        this.isLoading = false;
+    }
+
+    get hasRows() {
+        return !this.isLoading &amp;&amp; this.rows.length &gt; 0;
+    }
+
+    get isEmpty() {
+        return !this.isLoading &amp;&amp; !this.errorMessage &amp;&amp; this.rows.length === 0;
+    }
+
+    get nothingSelected() {
+        return this.selectedIds.length === 0;
+    }
+
+    handleSelection(event) {
+        this.selectedIds = event.detail.selectedRows.map((row) =&gt; row.Id);
+    }
+
+    async handleComplete() {
+        this.isLoading = true;
+        try {
+            await completeRequests({ requestIds: this.selectedIds });
+            this.selectedIds = [];
+            await refreshApex(this.wiredResult);
+            this.toast(&#x27;Success&#x27;, &#x27;Requests completed.&#x27;, &#x27;success&#x27;);
+        } catch (e) {
+            this.toast(&#x27;Could not complete&#x27;, e?.body?.message ?? &#x27;Unexpected error&#x27;, &#x27;error&#x27;);
+        } finally {
+            this.isLoading = false;
+        }
+    }
+
+    handleOpenModal() {
+        this.dispatchEvent(new CustomEvent(&#x27;newrequest&#x27;));
+    }
+
+    toast(title, message, variant) {
+        this.dispatchEvent(new ShowToastEvent({ title, message, variant }));
+    }
+}</code></pre></div>
+<div class="codewrap"><div class="codebar"><span>sample-project/packages/field-ops/main/default/lwc/serviceRequestConsole/serviceRequestConsole.html</span><button class="copy" type="button">Copy</button></div><pre class="code"><code>&lt;template&gt;
+    &lt;lightning-card title=&quot;Open Service Requests&quot; icon-name=&quot;custom:custom18&quot;&gt;
+        &lt;lightning-button
+            slot=&quot;actions&quot;
+            label=&quot;New Request&quot;
+            variant=&quot;brand&quot;
+            onclick={handleOpenModal}&gt;&lt;/lightning-button&gt;
+
+        &lt;div class=&quot;slds-p-horizontal_small&quot;&gt;
+            &lt;template lwc:if={isLoading}&gt;
+                &lt;lightning-spinner alternative-text=&quot;Loading&quot;&gt;&lt;/lightning-spinner&gt;
+            &lt;/template&gt;
+
+            &lt;template lwc:if={errorMessage}&gt;
+                &lt;div class=&quot;slds-text-color_error slds-p-vertical_small&quot;&gt;{errorMessage}&lt;/div&gt;
+            &lt;/template&gt;
+
+            &lt;template lwc:if={hasRows}&gt;
+                &lt;lightning-datatable
+                    key-field=&quot;Id&quot;
+                    data={rows}
+                    columns={columns}
+                    onrowselection={handleSelection}&gt;&lt;/lightning-datatable&gt;
+            &lt;/template&gt;
+
+            &lt;template lwc:if={isEmpty}&gt;
+                &lt;p class=&quot;slds-p-vertical_medium slds-text-color_weak&quot;&gt;No open requests. Nice.&lt;/p&gt;
+            &lt;/template&gt;
+        &lt;/div&gt;
+
+        &lt;div slot=&quot;footer&quot;&gt;
+            &lt;lightning-button
+                label=&quot;Mark selected complete&quot;
+                disabled={nothingSelected}
+                onclick={handleComplete}&gt;&lt;/lightning-button&gt;
+        &lt;/div&gt;
+    &lt;/lightning-card&gt;
+&lt;/template&gt;</code></pre></div>
+<div class="note"><p><b>What the namespace does to this component.</b> In your dev org you use
+<code>&lt;c-service-request-console&gt;</code>. In a subscriber org, after install, the same component is
+<code>&lt;opskit-service-request-console&gt;</code>, the label import <code>c.Ops_Request_Created</code>
+resolves to <code>opskit__Ops_Request_Created</code>, and the Apex import resolves to
+<code>opskit.ServiceRequestConsoleController</code>. You write <code>c.</code>; the platform rewrites it.
+This is exactly why you must test in a <b>non-namespaced org with the package installed</b>.</p></div>
+
+<h3>Permission set &mdash; the most commonly forgotten component</h3>
+<div class="codewrap"><div class="codebar"><span>sample-project/packages/core/main/default/permissionsets/Ops_Core_User.permissionset-meta.xml</span><button class="copy" type="button">Copy</button></div><pre class="code"><code>&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;
+&lt;PermissionSet xmlns=&quot;http://soap.sforce.com/2006/04/metadata&quot;&gt;
+    &lt;label&gt;Ops Toolkit Core User&lt;/label&gt;
+    &lt;description&gt;Read/write access to Service Requests and the core services. Assign to every Ops Toolkit user.&lt;/description&gt;
+    &lt;hasActivationRequired&gt;false&lt;/hasActivationRequired&gt;
+    &lt;classAccesses&gt;
+        &lt;apexClass&gt;ServiceRequestService&lt;/apexClass&gt;
+        &lt;enabled&gt;true&lt;/enabled&gt;
+    &lt;/classAccesses&gt;
+    &lt;classAccesses&gt;
+        &lt;apexClass&gt;ServiceRequestSelector&lt;/apexClass&gt;
+        &lt;enabled&gt;true&lt;/enabled&gt;
+    &lt;/classAccesses&gt;
+    &lt;classAccesses&gt;
+        &lt;apexClass&gt;OpsSettings&lt;/apexClass&gt;
+        &lt;enabled&gt;true&lt;/enabled&gt;
+    &lt;/classAccesses&gt;
+    &lt;objectPermissions&gt;
+        &lt;object&gt;Service_Request__c&lt;/object&gt;
+        &lt;allowCreate&gt;true&lt;/allowCreate&gt;
+        &lt;allowRead&gt;true&lt;/allowRead&gt;
+        &lt;allowEdit&gt;true&lt;/allowEdit&gt;
+        &lt;allowDelete&gt;false&lt;/allowDelete&gt;
+        &lt;viewAllRecords&gt;false&lt;/viewAllRecords&gt;
+        &lt;modifyAllRecords&gt;false&lt;/modifyAllRecords&gt;
+    &lt;/objectPermissions&gt;
+    &lt;fieldPermissions&gt;
+        &lt;field&gt;Service_Request__c.Summary__c&lt;/field&gt;
+        &lt;readable&gt;true&lt;/readable&gt;&lt;editable&gt;true&lt;/editable&gt;
+    &lt;/fieldPermissions&gt;
+    &lt;fieldPermissions&gt;
+        &lt;field&gt;Service_Request__c.Status__c&lt;/field&gt;
+        &lt;readable&gt;true&lt;/readable&gt;&lt;editable&gt;true&lt;/editable&gt;
+    &lt;/fieldPermissions&gt;
+    &lt;fieldPermissions&gt;
+        &lt;field&gt;Service_Request__c.Priority__c&lt;/field&gt;
+        &lt;readable&gt;true&lt;/readable&gt;&lt;editable&gt;true&lt;/editable&gt;
+    &lt;/fieldPermissions&gt;
+    &lt;fieldPermissions&gt;
+        &lt;field&gt;Service_Request__c.Account__c&lt;/field&gt;
+        &lt;readable&gt;true&lt;/readable&gt;&lt;editable&gt;true&lt;/editable&gt;
+    &lt;/fieldPermissions&gt;
+    &lt;fieldPermissions&gt;
+        &lt;field&gt;Service_Request__c.Requested_On__c&lt;/field&gt;
+        &lt;readable&gt;true&lt;/readable&gt;&lt;editable&gt;true&lt;/editable&gt;
+    &lt;/fieldPermissions&gt;
+    &lt;fieldPermissions&gt;
+        &lt;field&gt;Service_Request__c.Due_Date__c&lt;/field&gt;
+        &lt;readable&gt;true&lt;/readable&gt;&lt;editable&gt;true&lt;/editable&gt;
+    &lt;/fieldPermissions&gt;
+    &lt;fieldPermissions&gt;
+        &lt;field&gt;Service_Request__c.Is_Overdue__c&lt;/field&gt;
+        &lt;readable&gt;true&lt;/readable&gt;&lt;editable&gt;false&lt;/editable&gt;
+    &lt;/fieldPermissions&gt;
+    &lt;tabSettings&gt;
+        &lt;tab&gt;Service_Request__c&lt;/tab&gt;
+        &lt;visibility&gt;Visible&lt;/visibility&gt;
+    &lt;/tabSettings&gt;
+&lt;/PermissionSet&gt;</code></pre></div>
+<div class="tip"><p><b>Rule of thumb:</b> for every component you add to a package, ask &ldquo;which permission
+set grants access to this?&rdquo; Object, fields, Apex classes, tabs, apps, and record types all need explicit
+grants. If your answer is &ldquo;the admin will do it&rdquo;, your install experience is broken.</p></div>
+
+<h2>Build and run it (in a scratch org, before any packaging)</h2>
+<div class="codewrap"><div class="codebar"><span>bash</span><button class="copy" type="button">Copy</button></div><pre class="code"><code>cd sample-project
+git init &amp;&amp; git add -A &amp;&amp; git commit -m &quot;feat: ops toolkit application&quot;
+
+# create a dev scratch org, push, assign permission sets, seed data, open it
+./scripts/create-dev-org.sh dev1 7
+
+# run all tests with coverage - this must be green before you package anything
+sf apex run test --target-org dev1 --code-coverage --result-format human --wait 10</code></pre></div>
+<p><b>Verification for this stage:</b></p>
+<ul class="check">
+<li><code>sf project deploy start</code> completes with no errors</li>
+<li>All Apex tests pass and org-wide coverage is above 75%</li>
+<li>You can open the <b>Service Requests</b> tab and create a record; the due date defaults to today + SLA days</li>
+<li>The validation rule rejects a due date before the requested date</li>
+<li>The <b>Service Request Console</b> LWC lists open requests on an app page and can complete them</li>
+<li>Everything is committed to Git</li>
+</ul>
+
+<div class="stop"><p><b>Do not go further until this passes.</b> Every packaging error you meet from
+here is much easier to diagnose when you know the application itself is sound.</p></div>
+
+  <nav class="pager"><a class="prev" href="03-prereqs.html"><span>Previous</span>3 &middot; Prerequisites</a><a class="next" href="05-1gp.html"><span>Next</span>5 &middot; 1GP concepts</a></nav>
+  <footer class="sitefoot">
+    <p>Built as a personal learning course. Salesforce behaviour changes between releases &mdash;
+    always confirm against <a href="https://developer.salesforce.com/docs/atlas.en-us.sfdx_dev.meta/sfdx_dev/">Salesforce DX Developer Guide</a>
+    and the <a href="https://developer.salesforce.com/docs/atlas.en-us.packagingGuide.meta/packagingGuide/">ISVforce / Packaging guides</a>
+    before you rely on a detail in production.</p>
+  </footer>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

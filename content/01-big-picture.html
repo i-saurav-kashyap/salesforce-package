@@ -1,0 +1,236 @@
+<p class="lead">Every term you will meet, defined once, in the order that makes them build on each
+other. Read this once now; come back to it whenever a page uses a word you are not sure about.</p>
+
+<h2>Group 1 &mdash; Orgs (the environments)</h2>
+
+<h3>Salesforce org</h3>
+<p>An <b>org</b> (short for organisation) is one isolated tenant of the Salesforce platform: its own
+data, users, metadata, limits, and URL. Salesforce is multi-tenant &mdash; thousands of orgs share the
+same infrastructure &mdash; but no org can see another's data. Every single thing in this course
+happens inside some org. When you get stuck, the first question is always
+<b>&ldquo;which org am I actually talking to?&rdquo;</b></p>
+
+<h3>Developer Edition (DE) org</h3>
+<p>A free, permanent, feature-rich but tiny org (limits measured in megabytes and a handful of
+licences). You sign up at <a href="https://developer.salesforce.com/signup">developer.salesforce.com/signup</a>.
+DE orgs are the only orgs in which you can <b>register a namespace</b>, which makes them the foundation
+of both packaging generations. <span class="badge b-unk">Verify</span> Salesforce may deactivate DE orgs
+after long periods of inactivity &mdash; log into your namespace org occasionally.</p>
+
+<h3>Partner Business Org (PBO)</h3>
+<p>The org Salesforce provisions for a company that has joined the <b>Partner Program</b>. It is not a
+technical necessity for building packages &mdash; it is a <b>commercial</b> one. It is where you get:</p>
+<ul>
+<li>the <b>Partner Console / Publishing Console</b> (create listings, submit Security Review),</li>
+<li>the <b>Environment Hub</b> (create and track all your other orgs),</li>
+<li>the <b>License Management App (LMA)</b> (see who installed your package, manage licences),</li>
+<li>frequently, the <b>Dev Hub</b> for the company's 2GP packages,</li>
+<li>Trialforce / test-drive org management.</li>
+</ul>
+<p>One company normally has exactly one PBO. It must never be deleted.</p>
+
+<h3>Dev Hub</h3>
+<p>Not a separate product &mdash; a <b>feature you switch on inside an org</b>
+(Setup &rarr; Dev Hub). Once enabled, that org can:</p>
+<ul>
+<li>create and track <b>scratch orgs</b> (records in the <code>ScratchOrgInfo</code> object),</li>
+<li>own <b>2GP packages</b> (<code>Package2</code>) and <b>package versions</b> (<code>Package2Version</code>),</li>
+<li>link <b>namespace registries</b>.</li>
+</ul>
+<p><b>2GP cannot exist without a Dev Hub.</b> 1GP does not use one at all. Enabling Dev Hub is
+irreversible, and the org that hosts it is effectively permanent: it owns your package identity.</p>
+
+<h3>Scratch org</h3>
+<p>A <b>disposable, source-driven org</b> created from a JSON definition file, living 1&ndash;30 days
+(default 7). You describe the org you want (edition, features, settings, optional namespace) and the
+Dev Hub builds it. Scratch orgs support <b>source tracking</b>: the CLI knows which local files differ
+from the org, so <code>sf project deploy start</code> / <code>sf project retrieve start</code> move only
+what changed. Full treatment: <a href="09-scratch-orgs.html">Scratch org strategy</a>.</p>
+
+<h3>Sandbox</h3>
+<p>A copy of a <b>production</b> org (metadata, and optionally data), used by customers &mdash; and by
+you, when you test against a realistic environment. Sandboxes belong to the production org that spawned
+them and refresh from it. As an ISV you mostly do <i>not</i> use sandboxes for development; you use them
+to reproduce a customer's environment, because <b>a subscriber's sandbox is where they test your
+upgrade</b>. <span class="badge b-doc">Documented</span> Beta package versions can be installed in
+sandboxes and scratch/DE orgs, not in production.</p>
+
+<h3>Packaging org <span class="badge b-1gp">1GP</span></h3>
+<p>The single DE org where a 1GP managed package is defined. Its contents <i>are</i> the package.
+You develop elsewhere and deploy in, or you develop directly in it. If it is lost, your package
+lineage is effectively lost with it &mdash; you cannot recreate the same package elsewhere, because the
+namespace is stuck in that org. 2GP has no equivalent.</p>
+
+<h3>Subscriber / customer org</h3>
+<p>Any org that installs your package. From your code's point of view it is hostile territory: you do
+not control its profiles, its other managed packages, its data volume, or its admin. You can only
+observe it if the customer grants <b>Subscriber Support</b> access, which you reach through the LMA in
+your PBO.</p>
+
+<h3>Trialforce org / template</h3>
+<p>Trialforce is how AppExchange &ldquo;Try it free&rdquo; works. You build a <b>Trialforce Source Org (TSO)</b>
+that contains your package plus sample data, branding, and users; you snapshot it into a <b>Trialforce
+Template</b>; Salesforce then spins up a fresh trial org from that template for each prospect.
+<span class="badge b-unk">Verify</span> Trialforce provisioning, TSO expiry, and template approval rules
+change; confirm current steps in the ISVforce Guide before you plan a launch around it.</p>
+
+<h2>Group 2 &mdash; Identity (the namespace)</h2>
+
+<h3>Namespace</h3>
+<p>A 1&ndash;15 character globally-unique prefix (letters/numbers, must start with a letter) that Salesforce
+stamps onto every packaged component: <code>acme__Service_Request__c</code>,
+<code>acme.ServiceRequestService</code>, <code>acme__Manage_Requests</code>. It gives you:</p>
+<ul>
+<li><b>Collision avoidance</b> &mdash; your <code>Status__c</code> can coexist with the customer's <code>Status__c</code>.</li>
+<li><b>Isolation</b> &mdash; subscribers cannot edit your Apex; your code runs in its own namespace context.</li>
+<li><b>Identity</b> &mdash; the namespace is the brand key of the package forever.</li>
+</ul>
+<div class="warn"><p><b>Namespace rules that bite beginners</b>
+<span class="badge b-doc">Documented</span>: a namespace is registered in exactly one org; it cannot be
+changed, transferred, or released; it is globally unique across all of Salesforce; and once a managed
+package version has been released with it, you live with it. Pick a boring, short, real one
+(<code>opskit</code>), never <code>test1</code>.</p></div>
+
+<h2>Group 3 &mdash; Packages</h2>
+
+<h3>Package</h3>
+<p>A container that bundles metadata components for distribution. It is the unit of installation.</p>
+
+<h3>Unmanaged package</h3>
+<p>A one-time bundle of source. On install, everything becomes the subscriber's own metadata: they can
+edit it, and you can never upgrade it. No namespace, no versioning discipline, no IP protection. Used
+for templates, samples, and open-source starters &mdash; <b>never for a product</b>.</p>
+
+<h3>Managed package</h3>
+<p>A namespaced, upgradeable, IP-protected bundle. Your Apex is hidden from subscribers; you can push
+upgrades; components are locked from editing unless you deliberately allow it. Requires a registered
+namespace. This is what you list on AppExchange.</p>
+
+<h3>1GP &mdash; first-generation managed package</h3>
+<p>The original (2000s-era) model. The <b>packaging org is the source of truth</b>; you add components to
+a package in that org's UI and click <b>Upload</b> to mint a version. Automation is limited, branching
+is painful, dependencies are informal. Still used by large legacy ISVs (Sitetracker's main package is
+1GP) because migrating a released 1GP is a big project.</p>
+
+<h3>2GP &mdash; second-generation managed package</h3>
+<p>The modern model. <b>Your Git repo is the source of truth.</b> A package is defined in
+<code>sfdx-project.json</code>; versions are built by a Salesforce-hosted build process from your source;
+Dev Hub owns the metadata about packages. Supports real branching, CI, explicit dependencies, ancestry,
+and multiple packages sharing one namespace.
+<span class="badge b-doc">Documented</span> Salesforce recommends 2GP for all new managed packages.</p>
+
+<h3>Package version</h3>
+<p>An immutable, numbered snapshot of a package: <code>major.minor.patch.build</code>, e.g.
+<code>1.2.0.4</code>. Versions &mdash; not packages &mdash; are what customers install. You never edit a version;
+you create a new one.</p>
+
+<h3>Package version ID (and the other IDs)</h3>
+<div class="tablewrap">
+<table>
+<thead><tr><th>Prefix</th><th>Object</th><th>What it identifies</th><th>Where you use it</th></tr></thead>
+<tbody>
+<tr><td><code>033</code></td><td>SubscriberPackage</td><td>The package itself <span class="badge b-1gp">1GP</span></td><td>Rarely typed by hand</td></tr>
+<tr><td><code>0Ho</code></td><td>Package2</td><td>The package definition <span class="badge b-2gp">2GP</span></td><td><code>sfdx-project.json</code> alias, <code>sf package version create -p</code></td></tr>
+<tr><td><code>08c</code></td><td>Package2VersionCreateRequest</td><td>One <i>attempt</i> to build a version <span class="badge b-2gp">2GP</span></td><td><code>sf package version create report -i 08c...</code></td></tr>
+<tr><td><code>05i</code></td><td>Package2Version</td><td>The version record in <b>your</b> Dev Hub <span class="badge b-2gp">2GP</span></td><td>Ancestry, internal queries</td></tr>
+<tr><td><code>04t</code></td><td>SubscriberPackageVersion</td><td><b>The installable artifact</b> &mdash; both generations</td><td>Install URLs, <code>sf package install</code>, dependencies</td></tr>
+<tr><td><code>04t</code> in URL</td><td>&mdash;</td><td>Install link</td><td><code>https://login.salesforce.com/packaging/installPackage.apexp?p0=04t...</code></td></tr>
+</tbody>
+</table>
+</div>
+<p><b>If you remember one ID, remember <code>04t</code>.</b> It is the only ID a customer ever needs, the
+only ID a dependency declaration needs, and the thing every &ldquo;which version is installed?&rdquo; question
+resolves to.</p>
+
+<h3>Beta package version</h3>
+<p>A version that is <b>not</b> released: testable, and still deletable/replaceable.
+<span class="badge b-doc">Documented</span> Beta versions can be installed only in scratch orgs,
+sandboxes, DE orgs and Trialforce source orgs &mdash; not in production/subscriber orgs. A beta is not part
+of the upgrade lineage: customers can never upgrade <i>from</i> or <i>to</i> a beta.
+<span class="badge b-2gp">2GP</span> Every <code>sf package version create</code> produces a beta until you
+promote it. <span class="badge b-unk">Verify</span> unpromoted 2GP versions are subject to an expiry
+window (commonly cited as 30 days) &mdash; confirm the current rule before you rely on an old beta.</p>
+
+<h3>Released package version</h3>
+<p>A version marked <b>Managed &mdash; Released</b> <span class="badge b-1gp">1GP</span> or <b>promoted</b>
+<span class="badge b-2gp">2GP</span>. It is permanent, installable in production, and part of the upgrade
+chain. <b>You cannot delete it, un-release it, or change a single byte of it.</b> Everything cautious in
+this course exists because of this sentence.</p>
+
+<h3>Package installation key</h3>
+<p>An optional password (<code>--installation-key</code>) required to install a version. It stops people
+who happen to have your <code>04t</code> from installing your unreleased work. AppExchange-listed packages
+are normally key-free; internal/beta builds normally have keys. If you don't want one you must say so
+explicitly: <code>--installation-key-bypass</code>.</p>
+
+<h3>Package ancestry <span class="badge b-2gp">2GP</span></h3>
+<p>The declared lineage: &ldquo;version 1.2 is a descendant of 1.1&rdquo;. Because 2GP builds each version from
+whatever is in Git at that moment, Salesforce needs an explicit statement of what the new version is
+upgrading <i>from</i> in order to (a) enforce that you don't break subscribers, and (b) let subscribers
+upgrade. You declare it with <code>ancestorVersion</code> / <code>ancestorId</code> in
+<code>sfdx-project.json</code>. In 1GP, lineage is implicit &mdash; the packaging org only ever has one
+current state, so version N+1 always follows version N.</p>
+
+<h3>Package dependency</h3>
+<p>Package B <b>requires</b> Package A to be present. Declared in <code>sfdx-project.json</code>
+<span class="badge b-2gp">2GP</span>, or implied by API references <span class="badge b-1gp">1GP</span>.
+Consequences: install order is forced, upgrade order is constrained, and a missing dependency is a hard
+install failure. Full build-it-yourself treatment: <a href="11-dependencies.html">Dependencies</a>.</p>
+
+<h2>Group 4 &mdash; Distribution</h2>
+
+<h3>Partner Console (Publishing Console)</h3>
+<p>The app inside your PBO where the commercial side lives: your <b>Provider profile</b>, your
+<b>Solutions</b> (a solution = a package version, or an API/bolt-on), your <b>Listings</b> (what shoppers
+see), your Security Review submissions, and your trial/test-drive configuration.</p>
+
+<h3>Security Review</h3>
+<p>Salesforce's mandatory security assessment before a package can be publicly listed. Automated
+scanning plus human review of your code, storage of secrets, sharing model, CRUD/FLS enforcement,
+callouts, and authentication. It is a <b>gate</b>, not a formality: a review failure can cost weeks.
+Detail and checklist: <a href="13-security.html">Security Review readiness</a>.</p>
+
+<h3>AppExchange listing</h3>
+<p>The marketing artefact: title, description, screenshots, pricing, docs, demo video, categories,
+and the install button that points at your <code>04t</code>. A listing is <b>not</b> a package. You can
+have a package with no listing (private distribution by URL) and a listing whose package you update
+without touching the listing text.</p>
+
+<h2>How it all connects &mdash; the sentence version</h2>
+<div class="why">
+<p>You write metadata on your <b>laptop</b> and store it in <b>Git</b>. You need a <b>namespace</b>, which
+lives permanently in a <b>Developer Edition org</b>. In <b>1GP</b> that org is also the <b>packaging org</b>
+and clicking Upload mints a <b>package version</b>. In <b>2GP</b> a <b>Dev Hub</b> (usually inside your
+<b>Partner Business Org</b>) links to that namespace org, creates <b>scratch orgs</b> for you to develop in,
+and builds <b>package versions</b> from your Git source. Either way you end up with an <b>04t</b> ID.
+You install that 04t into a <b>test org</b>, iterate, then <b>release/promote</b> it &mdash; making it permanent.
+You attach the released version to a <b>Solution</b> in <b>Partner Console</b>, pass <b>Security Review</b>,
+publish an <b>AppExchange listing</b>, and a <b>customer org</b> installs it. When you ship 1.1, the customer
+<b>upgrades</b>, keeping their data, and your <b>ancestry</b>/lineage is what makes that upgrade legal.</p>
+</div>
+
+<h2>Which orgs belong to which generation</h2>
+<div class="tablewrap">
+<table>
+<thead><tr><th>Object / org</th><th>1GP</th><th>2GP</th><th>Note</th></tr></thead>
+<tbody>
+<tr><td>Partner Business Org</td><td>needed for listing</td><td>needed for listing</td><td>Not needed to merely build and install privately</td></tr>
+<tr><td>Dev Hub</td><td><b>not used</b></td><td><b>mandatory</b></td><td>Owns Package2 + Package2Version + scratch orgs</td></tr>
+<tr><td>Namespace org (DE)</td><td>mandatory &mdash; and it is the packaging org</td><td>mandatory &mdash; linked as Namespace Registry</td><td>Namespace is permanent either way</td></tr>
+<tr><td>Packaging org</td><td><b>mandatory</b>, permanent</td><td><b>does not exist</b></td><td>The core structural difference</td></tr>
+<tr><td>Scratch orgs</td><td>optional (dev only)</td><td>central</td><td>Needs Dev Hub, so 1GP-only shops often skip them</td></tr>
+<tr><td>Patch dev org</td><td>created from packaging org</td><td>not used &mdash; patches are just versions</td><td><span class="badge b-1gp">1GP</span></td></tr>
+<tr><td>Install-test org</td><td>essential</td><td>essential</td><td>Non-namespaced, never saw your source</td></tr>
+<tr><td>Trialforce source org</td><td>supported</td><td>supported</td><td>Set up from the PBO</td></tr>
+</tbody>
+</table>
+</div>
+
+<h2>Check yourself</h2>
+<ul class="check">
+<li>Explain a namespace to a non-Salesforce engineer in two sentences</li>
+<li>State, without looking, what <code>04t</code>, <code>0Ho</code> and <code>033</code> identify</li>
+<li>Say why a released version can never be deleted, and one design decision that follows from it</li>
+<li>Say what a Dev Hub does, and why 1GP does not need one</li>
+<li>Say the difference between a package, a package version, and a listing</li>
+</ul>

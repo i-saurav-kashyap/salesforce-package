@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The 14-Day Build Plan &middot; AppExchange From Zero</title>
+<link rel="stylesheet" href="assets/site.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<button class="navtoggle" aria-label="Toggle navigation">&#9776; Contents</button>
+<div class="shell">
+<nav class="sidenav" id="sidenav">
+  <div class="brand">
+    <span class="brand-mark">SF</span>
+    <span class="brand-text">AppExchange<br><b>From Zero</b></span>
+  </div>
+  <ol class="navlist">
+    <li><a href="index.html">Start here</a></li>
+    <li><a href="01-big-picture.html">1 &middot; Big picture</a></li>
+    <li><a href="02-orgs.html">2 &middot; Org architecture</a></li>
+    <li><a href="03-prereqs.html">3 &middot; Prerequisites</a></li>
+    <li><a href="04-the-app.html">4 &middot; The app</a></li>
+    <li><a href="05-1gp.html">5 &middot; 1GP concepts</a></li>
+    <li><a href="06-1gp-lifecycle.html">6 &middot; 1GP lifecycle</a></li>
+    <li><a href="07-2gp.html">7 &middot; 2GP concepts</a></li>
+    <li><a href="08-2gp-build.html">8 &middot; 2GP build</a></li>
+    <li><a href="09-scratch-orgs.html">9 &middot; Scratch orgs</a></li>
+    <li><a href="10-compare.html">10 &middot; 1GP vs 2GP</a></li>
+    <li><a href="11-dependencies.html">11 &middot; Dependencies</a></li>
+    <li><a href="12-install.html">12 &middot; Install &amp; upgrade</a></li>
+    <li><a href="13-security.html">13 &middot; Security Review</a></li>
+    <li><a href="14-cicd.html">14 &middot; CI/CD</a></li>
+    <li><a href="15-appexchange.html">15 &middot; AppExchange</a></li>
+    <li class="here"><a href="16-day-plan.html">16 &middot; Day-by-day plan</a></li>
+    <li><a href="17-debugging.html">17 &middot; Debug drills</a></li>
+    <li><a href="17b-error-index.html">17b &middot; Error index</a></li>
+    <li><a href="18-backend.html">18 &middot; Behind the scenes</a></li>
+    <li><a href="19-commands.html">19 &middot; Command cheat sheet</a></li>
+    <li><a href="20-quiz.html">20 &middot; Knowledge test</a></li>
+  </ol>
+  <div class="navfoot">
+    <p>Local course site.<br>Regenerate with <code>python3 build.py</code></p>
+  </div>
+</nav>
+<main id="main">
+  <header class="pagehead">
+    <p class="kicker">Part 16</p>
+    <h1>The 14-Day Build Plan</h1>
+  </header>
+  <p class="lead">Fourteen days, each about 2&ndash;4 focused hours. <b>Do not start a day until the previous
+day's verification passes.</b> If a day takes two days, take two days &mdash; the sequence matters, the
+calendar does not.</p>
+
+<div class="note"><p>Every day has the same shape: <b>objective &rarr; concepts &rarr; hands-on &rarr; commands
+&rarr; expected output &rarr; verification &rarr; common mistakes &rarr; what you can explain</b>. The final line of
+each day is the one that matters: if you cannot say it out loud, you have not finished the day.</p></div>
+
+<h2>Day 1 &mdash; Environment and vocabulary</h2>
+<p><b>Objective:</b> a working toolchain and two authenticated orgs.<br>
+<b>Concepts:</b> org, DE org, Dev Hub, namespace, package, 1GP vs 2GP (names only).<br>
+<b>Hands-on:</b> <a href="index.html">Stage 0</a> in full.<br>
+<b>Commands:</b> <code>npm i -g @salesforce/cli</code>, <code>sf org login web</code>, <code>sf org list</code>,
+<code>sf project generate</code>, <code>sf org create scratch</code>.<br>
+<b>Expected output:</b> a scratch org opens in your browser.<br>
+<b>Verification:</b> the Stage 0 checklist, all ticks.<br>
+<b>Common mistakes:</b> both <code>sfdx</code> and <code>sf</code> installed; Dev Hub not enabled; scratch org
+creation failing on a bad feature name.<br>
+<b>Explain:</b> what a Dev Hub is and why 1GP does not need one.</p>
+
+<h2>Day 2 &mdash; Org architecture and the namespace decision</h2>
+<p><b>Objective:</b> decide and record your org architecture; register nothing yet.<br>
+<b>Concepts:</b> PBO, Dev Hub, namespace org, packaging org, scratch org, install-test org.<br>
+<b>Hands-on:</b> read <a href="02-orgs.html">Part 2</a>; fill in the decision table in
+<a href="03-prereqs.html">Part 3 &sect;D</a>; check namespace availability candidates (do <b>not</b> save yet).<br>
+<b>Verification:</b> a written list of which org plays which role, and three candidate namespaces.<br>
+<b>Common mistakes:</b> planning to use one org for everything; choosing a namespace like <code>test1</code>.<br>
+<b>Explain:</b> what is lost if each org disappears.</p>
+
+<h2>Day 3 &mdash; Build the application (part 1)</h2>
+<p><b>Objective:</b> the data layer works in a scratch org.<br>
+<b>Concepts:</b> objects, fields, validation rules, list views, CMDT, custom labels.<br>
+<b>Hands-on:</b> deploy <code>packages/core</code>'s objects, CMDT, labels and tab; create records by hand.<br>
+<b>Commands:</b> <code>sf project deploy start</code>, <code>sf org assign permset</code>,
+<code>sf apex run --file scripts/apex/seed-data.apex</code>.<br>
+<b>Verification:</b> you can create a Service Request; the validation rule fires; the CMDT row is queryable.<br>
+<b>Common mistakes:</b> forgetting the permission set and then blaming the deploy.<br>
+<b>Explain:</b> why the SLA default is Custom Metadata and not a hard-coded constant.</p>
+
+<h2>Day 4 &mdash; Build the application (part 2)</h2>
+<p><b>Objective:</b> Apex + LWC + tests, all green.<br>
+<b>Concepts:</b> service/selector layering, <code>global</code> vs <code>public</code>, user mode, LWC wire adapters.<br>
+<b>Hands-on:</b> deploy the classes and the LWC; put the console on an app page; run the tests.<br>
+<b>Commands:</b> <code>sf apex run test --code-coverage --result-format human</code>.<br>
+<b>Verification:</b> all tests pass, coverage &gt;75%, the console lists and completes requests.<br>
+<b>Common mistakes:</b> marking everything <code>global</code>; forgetting <code>classAccesses</code> in the
+permission set.<br>
+<b>Explain:</b> what <code>global</code> commits you to forever.</p>
+
+<h2>Day 5 &mdash; 1GP: namespace, package, first beta</h2>
+<p><b>Objective:</b> a 1GP beta exists and installs.<br>
+<b>Concepts:</b> packaging org, component list, upload, beta.<br>
+<b>Hands-on:</b> <a href="06-1gp-lifecycle.html">Part 6</a> steps 1&ndash;8.<br>
+<b>Verification:</b> a <code>04t</code> exists; it installs into a clean org; a non-admin user with only your
+permission set can use the app.<br>
+<b>Common mistakes:</b> deploying a component but not <b>adding</b> it to the package.<br>
+<b>Explain:</b> what Salesforce reads to decide what is in a 1GP version.</p>
+
+<h2>Day 6 &mdash; 1GP: release and upgrade</h2>
+<p><b>Objective:</b> feel the irreversibility.<br>
+<b>Hands-on:</b> release 1.0; install it; build an additive 1.1; upgrade the same org; confirm data survived.<br>
+<b>Verification:</b> records created under 1.0 still exist after upgrading to 1.1.<br>
+<b>Common mistakes:</b> releasing before install-testing; trying to change a <code>global</code> signature in 1.1.<br>
+<b>Explain:</b> three things you can never change after a release, and why patches need their own org.</p>
+
+<h2>Day 7 &mdash; 2GP: Dev Hub, namespace link, first package</h2>
+<p><b>Objective:</b> two <code>0Ho</code> package definitions.<br>
+<b>Hands-on:</b> link the namespace registry; <code>sf package create</code> for Core and Field Ops; inspect
+the diff in <code>sfdx-project.json</code>.<br>
+<b>Verification:</b> <code>sf package list --verbose</code> shows both; aliases committed.<br>
+<b>Common mistakes:</b> namespace not linked; namespace string mismatch; 2GP not enabled in the Dev Hub.<br>
+<b>Explain:</b> which Dev Hub objects now hold your package identity.</p>
+
+<h2>Day 8 &mdash; 2GP: versions, install, promote</h2>
+<p><b>Objective:</b> a released 2GP version installed in a customer-like org.<br>
+<b>Hands-on:</b> <a href="08-2gp-build.html">Part 8</a> steps 5&ndash;8; keep the failed attempts and read them
+with <code>sf package version create report</code>.<br>
+<b>Verification:</b> <code>sf package version list --released</code> shows your versions; install works in a
+non-namespaced org.<br>
+<b>Common mistakes:</b> forgetting <code>--code-coverage</code> and then being unable to promote.<br>
+<b>Explain:</b> the full journey from <code>08c</code> to <code>04t</code>.</p>
+
+<h2>Day 9 &mdash; Ancestry and upgrades</h2>
+<p><b>Objective:</b> a real upgrade path.<br>
+<b>Hands-on:</b> add <code>ancestorVersion</code>; build 1.1; upgrade a customer org that has 1.0; then
+deliberately build a version <b>without</b> ancestry and observe the difference.<br>
+<b>Verification:</b> upgrade succeeds and data is preserved.<br>
+<b>Common mistakes:</b> forgetting ancestry until customers exist.<br>
+<b>Explain:</b> why 2GP needs ancestry and 1GP does not.</p>
+
+<h2>Day 10 &mdash; Dependencies A &rarr; B (&rarr; C)</h2>
+<p><b>Objective:</b> a working, enforced dependency.<br>
+<b>Hands-on:</b> <a href="11-dependencies.html">Part 11 A</a>: declare the dependency, build B, install in
+the wrong order on purpose, then the right order. Optionally add package C.<br>
+<b>Verification:</b> B refuses to build without the declaration; B refuses to install without A.<br>
+<b>Common mistakes:</b> leaving <code>LATEST</code> on a release branch.<br>
+<b>Explain:</b> what happens inside the build environment when a dependency is declared.</p>
+
+<h2>Day 11 &mdash; 1GP &rarr; 2GP dependency, and the graph</h2>
+<p><b>Objective:</b> a 2GP package depending on your own 1GP package.<br>
+<b>Hands-on:</b> <a href="11-dependencies.html">Part 11 B and C</a>; inspect everything with
+<code>sf package version report --verbose</code> and <code>sf package version displayancestry</code>.<br>
+<b>Verification:</b> the 2GP builds against the 1GP <code>04t</code> and installs in the right order.<br>
+<b>Common mistakes:</b> depending on a <b>beta</b> 1GP version.<br>
+<b>Explain:</b> why the reverse direction does not exist, and what a circular dependency really means.</p>
+
+<h2>Day 12 &mdash; Customer simulation: the seven install tests</h2>
+<p><b>Objective:</b> break your own product the way customers will.<br>
+<b>Hands-on:</b> the <a href="12-install.html">Part 12 test matrix</a>, all seven, especially the
+<b>failed upgrade</b>.<br>
+<b>Verification:</b> you can produce, and then explain, a failed upgrade and a failed dependency install.<br>
+<b>Common mistakes:</b> testing only as a System Administrator.<br>
+<b>Explain:</b> what upgrade does to data, deleted metadata, layouts and permission sets.</p>
+
+<h2>Day 13 &mdash; Security</h2>
+<p><b>Objective:</b> a clean scan and a security-literate codebase.<br>
+<b>Hands-on:</b> <a href="13-security.html">Part 13</a>: add <code>VulnerableDemo</code>, scan, fix all eight
+findings, delete the file, re-scan; then walk the readiness checklist against your real code.<br>
+<b>Verification:</b> scan clean at your threshold; every checklist item ticked or justified in writing.<br>
+<b>Common mistakes:</b> assuming <code>with sharing</code> covers FLS.<br>
+<b>Explain:</b> CRUD vs FLS vs sharing, in one paragraph each.</p>
+
+<h2>Day 14 &mdash; CI/CD, AppExchange, and the exam</h2>
+<p><b>Objective:</b> hands off the keyboard for releases; know the commercial path.<br>
+<b>Hands-on:</b> set up JWT auth and both workflows from <a href="14-cicd.html">Part 14</a>; open a PR and
+watch it validate; read <a href="15-appexchange.html">Part 15</a>; then take the
+<a href="20-quiz.html">final test</a>.<br>
+<b>Verification:</b> a PR goes green without you touching an org; a release workflow produces a
+<code>04t</code>.<br>
+<b>Common mistakes:</b> secrets in the repo; scratch orgs leaked by failed jobs.<br>
+<b>Explain:</b> the entire chain from a commit to a customer's org, out loud, in under three minutes.</p>
+
+<hr>
+<h2>Progress tracker</h2>
+<ul class="check">
+<li>Day 1 &mdash; toolchain + orgs</li>
+<li>Day 2 &mdash; org architecture decided</li>
+<li>Day 3 &mdash; data layer</li>
+<li>Day 4 &mdash; Apex + LWC + tests</li>
+<li>Day 5 &mdash; 1GP beta installed</li>
+<li>Day 6 &mdash; 1GP released + upgraded</li>
+<li>Day 7 &mdash; 2GP packages created</li>
+<li>Day 8 &mdash; 2GP version released</li>
+<li>Day 9 &mdash; ancestry + upgrade</li>
+<li>Day 10 &mdash; dependency A &rarr; B</li>
+<li>Day 11 &mdash; 1GP &rarr; 2GP dependency + graph</li>
+<li>Day 12 &mdash; seven install tests</li>
+<li>Day 13 &mdash; security scan clean</li>
+<li>Day 14 &mdash; CI green + exam taken</li>
+</ul>
+
+  <nav class="pager"><a class="prev" href="15-appexchange.html"><span>Previous</span>15 &middot; AppExchange</a><a class="next" href="17-debugging.html"><span>Next</span>17 &middot; Debug drills</a></nav>
+  <footer class="sitefoot">
+    <p>Built as a personal learning course. Salesforce behaviour changes between releases &mdash;
+    always confirm against <a href="https://developer.salesforce.com/docs/atlas.en-us.sfdx_dev.meta/sfdx_dev/">Salesforce DX Developer Guide</a>
+    and the <a href="https://developer.salesforce.com/docs/atlas.en-us.packagingGuide.meta/packagingGuide/">ISVforce / Packaging guides</a>
+    before you rely on a detail in production.</p>
+  </footer>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

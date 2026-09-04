@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Architect-Level Interview &middot; AppExchange From Zero</title>
+<link rel="stylesheet" href="assets/site.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<button class="navtoggle" aria-label="Toggle navigation">&#9776; Contents</button>
+<div class="shell">
+<nav class="sidenav" id="sidenav">
+  <div class="brand">
+    <span class="brand-mark">SF</span>
+    <span class="brand-text">AppExchange<br><b>From Zero</b></span>
+  </div>
+  <ol class="navlist">
+    <li><a href="index.html">Start here</a></li>
+    <li><a href="01-big-picture.html">1 &middot; Big picture</a></li>
+    <li><a href="02-orgs.html">2 &middot; Org architecture</a></li>
+    <li><a href="03-prereqs.html">3 &middot; Prerequisites</a></li>
+    <li><a href="04-the-app.html">4 &middot; The app</a></li>
+    <li><a href="05-1gp.html">5 &middot; 1GP concepts</a></li>
+    <li><a href="06-1gp-lifecycle.html">6 &middot; 1GP lifecycle</a></li>
+    <li><a href="07-2gp.html">7 &middot; 2GP concepts</a></li>
+    <li><a href="08-2gp-build.html">8 &middot; 2GP build</a></li>
+    <li><a href="09-scratch-orgs.html">9 &middot; Scratch orgs</a></li>
+    <li><a href="10-compare.html">10 &middot; 1GP vs 2GP</a></li>
+    <li><a href="11-dependencies.html">11 &middot; Dependencies</a></li>
+    <li><a href="12-install.html">12 &middot; Install &amp; upgrade</a></li>
+    <li><a href="13-security.html">13 &middot; Security Review</a></li>
+    <li><a href="14-cicd.html">14 &middot; CI/CD</a></li>
+    <li><a href="15-appexchange.html">15 &middot; AppExchange</a></li>
+    <li><a href="16-day-plan.html">16 &middot; Day-by-day plan</a></li>
+    <li><a href="17-debugging.html">17 &middot; Debug drills</a></li>
+    <li><a href="17b-error-index.html">17b &middot; Error index</a></li>
+    <li><a href="18-backend.html">18 &middot; Behind the scenes</a></li>
+    <li><a href="19-commands.html">19 &middot; Command cheat sheet</a></li>
+    <li class="here"><a href="20-quiz.html">20 &middot; Knowledge test</a></li>
+  </ol>
+  <div class="navfoot">
+    <p>Local course site.<br>Regenerate with <code>python3 build.py</code></p>
+  </div>
+</nav>
+<main id="main">
+  <header class="pagehead">
+    <p class="kicker">Part 20</p>
+    <h1>Architect-Level Interview</h1>
+  </header>
+  <p class="lead">The exam. Answer out loud or in writing <b>before</b> opening any solution &mdash; a
+recognised answer is not a known answer. Bring your answers to me and I will grade them the way a senior
+Salesforce architect would in an interview: I will push on the weak parts rather than accept the shape of
+a correct answer.</p>
+
+<div class="note"><p><b>How to use this page.</b> Work a tier at a time. Say the answer, then open the
+&ldquo;what a strong answer contains&rdquo; block and score yourself: <b>3</b> = I said all of that, <b>2</b> = I said
+the core, <b>1</b> = I recognised it, <b>0</b> = no. Anything below 2 goes back to the linked page.</p></div>
+
+<h2>Tier 1 &mdash; Foundations</h2>
+
+<h3>Q1. What is a scratch org?</h3>
+<details><summary>What a strong answer contains</summary>
+<p>Disposable, source-driven org created <b>by a Dev Hub</b> from a JSON definition (edition, features,
+settings, namespace), living 1&ndash;30 days, with <b>source tracking</b>. Its state is never authoritative &mdash;
+Git is. A weak answer says &ldquo;a temporary developer org&rdquo; and stops. A strong one mentions the Dev Hub, the
+definition file, source tracking, and the fact that losing one should cost nothing.
+(<a href="09-scratch-orgs.html">Part 9</a>)</p>
+</details>
+
+<h3>Q2. What is a namespace, and what does registering one commit you to?</h3>
+<details><summary>Strong answer</summary>
+<p>A globally-unique prefix applied to every packaged component, giving collision avoidance, isolation
+and identity. Registered in <b>exactly one DE org</b>, permanently: it cannot be renamed, moved, released
+or reused. In 1GP that org becomes the packaging org; in 2GP it is linked to the Dev Hub as a Namespace
+Registry. (<a href="01-big-picture.html">Part 1</a>)</p>
+</details>
+
+<h3>Q3. Name the four IDs and what each identifies.</h3>
+<details><summary>Strong answer</summary>
+<p><code>033</code> = 1GP package. <code>0Ho</code> = 2GP package definition. <code>08c</code> = a version-create
+<i>request</i> (attempt). <code>05i</code> = the version record in your Dev Hub. <code>04t</code> = the
+<b>subscriber package version</b> &mdash; the only one a customer or a dependency ever needs.</p>
+</details>
+
+<h2>Tier 2 &mdash; Structural understanding</h2>
+
+<h3>Q4. Why does 2GP not need a packaging org?</h3>
+<details><summary>Strong answer</summary>
+<p>Because the input to a version build is your <b>source tree</b>, not an org's state. The Dev Hub holds
+package <i>identity</i> (<code>Package2</code>) and version <i>records</i>, and Salesforce provisions a
+throwaway build environment to compile each version. There is nothing left for a permanent packaging org
+to hold. Follow-ups a strong candidate handles: what the Dev Hub does hold; what happens if the Dev Hub is
+lost (you cannot build new versions; existing installs keep working); why 1GP <i>must</i> have one.</p>
+</details>
+
+<h3>Q5. How does package ancestry work, and why does 1GP not need it?</h3>
+<details><summary>Strong answer</summary>
+<p>Ancestry is the <b>declared</b> lineage (<code>ancestorVersion</code>/<code>ancestorId</code>) stating which
+released version a new version descends from. It enables upgrades and lets Salesforce enforce
+compatibility at build time (e.g. refusing a build that removed a released <code>global</code> method).
+1GP does not need it because the packaging org has exactly one state, so version N+1 implicitly follows
+version N &mdash; which is also why 1GP cannot branch. Bonus: without ancestry your customers can only
+uninstall/reinstall, losing data.</p>
+</details>
+
+<h3>Q6. How does a 2GP dependency resolve &mdash; at build time and at install time?</h3>
+<details><summary>Strong answer</summary>
+<p><b>Build:</b> the declaration in <code>sfdx-project.json</code> resolves to a concrete <code>04t</code>
+(<code>LATEST</code> resolves to the newest matching build; an alias or ID pins it). Salesforce installs the
+dependency into the build environment before deploying and compiling your source &mdash; which is why a missing
+declaration shows up as an Apex compile error. The resolved dependency list is recorded on the version.
+<b>Install:</b> Salesforce checks that list against the target org and fails, naming the required
+<code>04t</code>, if it is absent. Dependencies are never auto-installed.</p>
+</details>
+
+<h3>Q7. Why use a non-namespaced scratch org for customer-like testing?</h3>
+<details><summary>Strong answer</summary>
+<p>A real subscriber org has no namespace of its own; your package's components arrive prefixed while the
+subscriber's stay unprefixed. A non-namespaced org with your package <i>installed</i> reproduces exactly
+that. A namespaced org makes locally-pushed components look packaged, hiding the difference between
+&ldquo;works because I pushed it&rdquo; and &ldquo;works because it is in the package&rdquo; &mdash; which is precisely the class of
+bug (missing components, permission gaps, hard-coded API names) that install testing exists to catch.</p>
+</details>
+
+<h3>Q8. What can and cannot change after a managed version is released?</h3>
+<details><summary>Strong answer</summary>
+<p><b>Can:</b> add components, add <code>global</code> methods, change <code>public</code> internals freely, add
+picklist values, change labels, deprecate. <b>Cannot:</b> remove/rename/change the signature of anything
+<code>global</code>, reduce its visibility, delete released objects/fields, change field types, change the
+namespace, delete or un-release a version. A strong answer adds: removing a component from the package
+does not remove it from subscriber orgs &mdash; it orphans it. (<a href="05-1gp.html">Part 5</a>)</p>
+</details>
+
+<h2>Tier 3 &mdash; Design</h2>
+
+<h3>Q9. Design the org architecture for a 3-package AppExchange product.</h3>
+<details><summary>What I will be listening for</summary>
+<ul>
+<li><b>Permanent:</b> PBO (Publishing Console, Environment Hub, LMA) with the <b>Dev Hub</b> enabled in it;
+one <b>namespace org</b> (DE) linked as a Namespace Registry, never developed in.</li>
+<li><b>Ephemeral:</b> namespaced dev scratch orgs per developer; per-PR CI scratch orgs;
+<b>non-namespaced install-test</b> orgs; an <b>upgrade-test</b> org holding the previous released version.</li>
+<li><b>Long-lived:</b> QA org, UAT/demo org (listing screenshots), optional Trialforce source org.</li>
+<li><b>Repo:</b> monorepo with three package directories; dependencies declared; <code>LATEST</code> on feature
+branches, pinned on release branches; tags per released version; <code>packageAliases</code> committed.</li>
+<li><b>Process:</b> PR validation in a scratch org; beta on merge; install-test in a clean org; promotion
+behind a manual approval; documented install order; upgrade rehearsal with realistic data.</li>
+<li><b>Risk answers:</b> what if the Dev Hub is lost; what if the namespace org is deactivated; why one
+Dev Hub per company; why nobody develops in the namespace org.</li>
+</ul>
+</details>
+
+<h3>Q10. Package B (2GP) must call Package A (1GP). Walk me through it.</h3>
+<details><summary>Strong answer</summary>
+<p>Supported. Declare the dependency by <code>subscriberPackageVersionId</code> (a <code>04t</code>) because a 1GP
+package has no <code>Package2</code> record to alias. Use a <b>released</b> 1GP version (a beta could never be
+satisfied in production). At build, Salesforce installs that exact version into the build environment; at
+install, the customer must already have it. B can only call A's <code>global</code> surface. There is no
+<code>LATEST</code> for a 1GP dependency, so bumping it is a deliberate commit. The reverse &mdash; 1GP depending on
+2GP &mdash; has no declaration mechanism at all. Flag honestly which details you would verify in current docs
+(installation keys for dependencies, shared-namespace rules).</p>
+</details>
+
+<h3>Q11. Your customer's upgrade to 1.2 failed. Diagnose.</h3>
+<details><summary>How to reason, not one answer</summary>
+<ol>
+<li><b>Read the actual error</b> &mdash; upgrade failures are usually explicit (validation rule, required
+field, Apex compile error, missing dependency).</li>
+<li><b>Data-driven?</b> A newly-required field or new validation rule that their existing data violates.
+Most common. Fix: ship non-required, clean up, tighten later.</li>
+<li><b>Dependency?</b> 1.2 requires a newer version of a dependency that they have not upgraded. Fix:
+upgrade the dependency first; document the order.</li>
+<li><b>Compilation?</b> Your Apex compiles in the subscriber org's context &mdash; their metadata is part of
+that context. Something in their org (a deleted field your code references dynamically, a conflicting
+component) broke it.</li>
+<li><b>Post-install script?</b> It hit a governor limit or assumed a starting state their org does not have.</li>
+<li><b>Reproduce</b> in an org with 1.1 installed and data shaped like theirs. Then add that scenario to
+the upgrade-test job so it never recurs.</li>
+</ol>
+</details>
+
+<h3>Q12. When would you argue <i>against</i> splitting into more packages?</h3>
+<details><summary>Strong answer</summary>
+<p>When the packages always ship together and every customer gets all of them: you have added install
+steps, version-coordination overhead, dependency declarations, and more upgrade failure modes for no
+licensing or cadence benefit. Split when release cadence genuinely differs, when modules are sold
+separately, or when a stable core needs protecting from a volatile UI. A candidate who says &ldquo;more
+packages = better modularity&rdquo; has not run an upgrade for 200 customers.</p>
+</details>
+
+<h2>Tier 4 &mdash; Troubleshooting scenarios</h2>
+<p>For each: what do you check first, second, third? These map to
+<a href="17-debugging.html">Part 17</a>, but state your <i>reasoning order</i>, not the memorised answer.</p>
+<div class="tablewrap">
+<table>
+<thead><tr><th>#</th><th>Scenario</th><th>The trap</th></tr></thead>
+<tbody>
+<tr><td>S1</td><td><code>sf package create</code> says the namespace is not linked, but you registered it this morning</td><td>Three things must agree: DE org registration, Dev Hub link, project file string</td></tr>
+<tr><td>S2</td><td>A test passes locally, fails during <code>package version create</code></td><td>The build environment has no seed data and no org customisation</td></tr>
+<tr><td>S3</td><td>You cannot promote a version you built yesterday</td><td>Coverage is computed at create time only</td></tr>
+<tr><td>S4</td><td>Install works for you, users see nothing</td><td>You are an admin; test with a plain user and only your permission sets</td></tr>
+<tr><td>S5</td><td>CI has been failing since 3pm with no code change</td><td>Scratch org daily/active limits; leaked orgs from failed jobs</td></tr>
+<tr><td>S6</td><td>A released 1GP version contains a field that is not in Git</td><td>Packaging-org drift &mdash; the structural weakness of 1GP</td></tr>
+<tr><td>S7</td><td>Customer cannot uninstall your base package</td><td>Another installed package depends on it; uninstall order is the reverse of install</td></tr>
+<tr><td>S8</td><td>Two packages need different versions of a shared dependency</td><td>An org holds one version; it must satisfy the highest requirement</td></tr>
+</tbody>
+</table>
+</div>
+
+<h2>The final question</h2>
+<div class="why">
+<p><b>In under three minutes, without notes:</b> trace a single line of code from your laptop to a
+paying customer's org. Name every org, artefact, ID and gate it passes through, and say what would
+break at each step if you got it wrong.</p>
+<p>When you can do that fluently, you have finished this course and can honestly say: <i>&ldquo;I built a
+Salesforce application from scratch, packaged it as a managed package in both generations, created
+package versions and dependencies, tested installation and upgrades, connected the solution to Partner
+Console, and understand how it becomes an AppExchange product.&rdquo;</i></p>
+</div>
+
+  <nav class="pager"><a class="prev" href="19-commands.html"><span>Previous</span>19 &middot; Command cheat sheet</a></nav>
+  <footer class="sitefoot">
+    <p>Built as a personal learning course. Salesforce behaviour changes between releases &mdash;
+    always confirm against <a href="https://developer.salesforce.com/docs/atlas.en-us.sfdx_dev.meta/sfdx_dev/">Salesforce DX Developer Guide</a>
+    and the <a href="https://developer.salesforce.com/docs/atlas.en-us.packagingGuide.meta/packagingGuide/">ISVforce / Packaging guides</a>
+    before you rely on a detail in production.</p>
+  </footer>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

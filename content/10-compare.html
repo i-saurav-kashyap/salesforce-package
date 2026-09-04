@@ -1,0 +1,87 @@
+<p class="lead">The comparison table you will be asked about in interviews, followed by the plain-English
+version, followed by the migration question everyone asks.</p>
+
+<h2>The table</h2>
+<div class="tablewrap">
+<table>
+<thead><tr><th>Topic</th><th>1GP</th><th>2GP</th></tr></thead>
+<tbody>
+<tr><td><b>Source of truth</b></td><td>The packaging org. Git is a copy that can drift.</td><td><b>Git.</b> The package directory defines the package.</td></tr>
+<tr><td><b>Packaging org</b></td><td>Required, permanent, irreplaceable.</td><td><b>Does not exist.</b></td></tr>
+<tr><td><b>Dev Hub</b></td><td>Not used.</td><td>Required. Owns <code>Package2</code>, <code>Package2Version</code>, scratch orgs.</td></tr>
+<tr><td><b>Scratch org</b></td><td>Optional, for development only (and needs a Dev Hub anyway).</td><td>Central: development, CI validation, install testing.</td></tr>
+<tr><td><b>Namespace</b></td><td>Registered in the packaging org; one namespace = one package in practice.</td><td>Registered in a DE org, <b>linked</b> to the Dev Hub; <b>many packages can share one namespace</b>.</td></tr>
+<tr><td><b>Package creation</b></td><td>UI: Setup &rarr; Package Manager &rarr; New. No supported CLI.</td><td><code>sf package create</code> &mdash; scriptable.</td></tr>
+<tr><td><b>What defines package contents</b></td><td>A manually curated component list inside the org.</td><td>The files under the package directory.</td></tr>
+<tr><td><b>Version creation</b></td><td>UI Upload (or <code>sf package1 version create</code>); snapshots the org.</td><td><code>sf package version create</code>; builds from source in a Salesforce-managed build org.</td></tr>
+<tr><td><b>Version control</b></td><td>Bolted on; nothing links a commit to a version.</td><td>Native; a version corresponds to a commit you can tag.</td></tr>
+<tr><td><b>Branching</b></td><td>Effectively impossible &mdash; one org, one state.</td><td>Natural; each branch can produce a version.</td></tr>
+<tr><td><b>CI/CD</b></td><td>Hard. Uploads are UI-centric and serialised.</td><td>Designed for it: create &rarr; install &rarr; test &rarr; promote in a pipeline.</td></tr>
+<tr><td><b>Dependency management</b></td><td>Implicit and undeclared; managed by convention and documentation.</td><td><b>Declared</b> in <code>sfdx-project.json</code>; enforced at build and install time.</td></tr>
+<tr><td><b>Upgrade model</b></td><td>Install a newer version of the same package; data preserved.</td><td>Same from the subscriber's view &mdash; but requires correct <b>ancestry</b> to be possible at all.</td></tr>
+<tr><td><b>Patch model</b></td><td>Separate <b>patch development org</b> branched from a released version; restricted content; must be merged forward manually.</td><td>Just another version (bump the patch digit) built from a maintenance branch &mdash; no special org.</td></tr>
+<tr><td><b>Ancestry</b></td><td>Implicit and linear.</td><td><b>Explicit</b> (<code>ancestorVersion</code>/<code>ancestorId</code>); supports branching lineages.</td></tr>
+<tr><td><b>Automation of releases</b></td><td>Human clicking Upload.</td><td>A CI job on a tag.</td></tr>
+<tr><td><b>Metadata coverage</b></td><td>Very broad &mdash; decades of supported types.</td><td>Broad and growing, but <b>not identical</b>. <span class="badge b-unk">Verify</span> the &ldquo;Metadata Coverage Report&rdquo; for your specific components before committing.</td></tr>
+<tr><td><b>Org-dependent packages</b></td><td>n/a</td><td>Supported for Unlocked packages (build against a specific org's metadata). Not the default for managed.</td></tr>
+<tr><td><b>AppExchange</b></td><td>Fully supported; many listed products are 1GP.</td><td>Fully supported.</td></tr>
+<tr><td><b>Security Review</b></td><td>Required.</td><td>Required.</td></tr>
+<tr><td><b>Recommended for new products</b></td><td><b>No.</b></td><td><b>Yes</b> &mdash; Salesforce's current recommendation.</td></tr>
+</tbody>
+</table>
+</div>
+
+<h2>In plain English</h2>
+
+<h3>1. The difference is where the truth lives</h3>
+<p>In 1GP you are curating an org and occasionally photographing it. In 2GP you are building software
+from source. Everything else &mdash; branching, CI, dependencies, ancestry &mdash; is a consequence.</p>
+
+<h3>2. 1GP's packaging org is a single point of failure with no replica</h3>
+<p>You cannot recreate it. You cannot move the namespace. You cannot have two of them. Every ISV running
+1GP has an internal rule that nobody touches that org casually, and that rule exists because there is no
+technical protection.</p>
+
+<h3>3. 2GP lets one namespace hold many packages</h3>
+<p>That is not a minor convenience &mdash; it is what makes a modular product possible. Ops Toolkit Core and
+Ops Toolkit Field Ops both live in <code>opskit</code>, ship separately, version separately, and can be sold
+separately. In 1GP that would be two namespaces and two packaging orgs and a lot of cross-namespace pain.</p>
+
+<h3>4. Dependencies stop being tribal knowledge</h3>
+<p>1GP: &ldquo;install the base package first&rdquo; is a sentence in your install guide, enforced by hope. 2GP: the
+platform refuses to build or install in the wrong order.</p>
+
+<h3>5. Ancestry is the tax 2GP pays for its freedom</h3>
+<p>Because 2GP can build any version from any commit, it needs you to state which released version each
+new one descends from. Forget it, and you have built something customers cannot upgrade to. 1GP never
+had this problem &mdash; and also never had branches.</p>
+
+<h3>6. Patches: a whole org vs a digit</h3>
+<p>1GP patching means asking Salesforce for a patch org, fixing there, uploading from there, and manually
+merging the fix back. 2GP patching means checking out the release branch, fixing, bumping
+<code>1.2.<b>1</b>.NEXT</code>, and building. Same outcome, an order of magnitude less ceremony.</p>
+
+<h2>&ldquo;We have a 1GP. Should we move to 2GP?&rdquo;</h2>
+<p>The honest answer for a fresher to give: <b>it depends, and it is a project, not a command.</b></p>
+<ul>
+<li>Salesforce provides a <b>1GP to 2GP migration</b> path that lets a 2GP package continue the lineage of
+an existing 1GP package in the same namespace, so subscribers upgrade rather than reinstall.
+<span class="badge b-doc">Documented</span> that this capability exists.</li>
+<li><span class="badge b-unk">Verify</span> the current prerequisites, restrictions and exact steps in the
+<b>Second-Generation Managed Packaging Developer Guide</b> before planning one &mdash; the details have changed
+several times and are specific to your package's state.</li>
+<li>Realistically the hard part is not the migration command; it is that your source has to become
+genuinely authoritative, which usually means months of reconciling the packaging org against Git.</li>
+</ul>
+<div class="note"><p><b>Interview-safe framing:</b> &ldquo;New products go 2GP. Existing 1GP products migrate
+when the cost of not having CI exceeds the cost of the migration, and the migration is mostly about
+making the repo the source of truth, not about the packaging commands.&rdquo;</p></div>
+
+<h2>Quick recall</h2>
+<ul class="check">
+<li>I can recite the source-of-truth difference in one sentence</li>
+<li>I can explain why 2GP needs ancestry and 1GP does not</li>
+<li>I can explain why one namespace can hold many 2GP packages</li>
+<li>I can describe 1GP patching and why it is error-prone</li>
+<li>I know which generation to recommend for a new product, and why</li>
+</ul>

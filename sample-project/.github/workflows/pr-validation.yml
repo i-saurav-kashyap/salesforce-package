@@ -1,0 +1,64 @@
+name: PR validation
+
+# Runs on every pull request: static analysis, then a real scratch org where the
+# source is deployed and all Apex tests run. Nothing here creates a package version.
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Salesforce CLI
+        run: npm install --global @salesforce/cli
+
+      - name: Authenticate Dev Hub (JWT)
+        env:
+          DEVHUB_CLIENT_ID: ${{ secrets.DEVHUB_CLIENT_ID }}
+          DEVHUB_USERNAME: ${{ secrets.DEVHUB_USERNAME }}
+          DEVHUB_JWT_KEY: ${{ secrets.DEVHUB_JWT_KEY }}
+        run: |
+          echo "$DEVHUB_JWT_KEY" > server.key
+          sf org login jwt \
+            --client-id "$DEVHUB_CLIENT_ID" \
+            --jwt-key-file server.key \
+            --username "$DEVHUB_USERNAME" \
+            --set-default-dev-hub --alias devhub
+          rm -f server.key
+
+      - name: Static analysis
+        run: |
+          sf plugins install code-analyzer
+          sf code-analyzer run --workspace ./packages --severity-threshold 2
+
+      - name: Create scratch org
+        run: |
+          sf org create scratch --definition-file config/project-scratch-def.json \
+            --alias ci --duration-days 1 --wait 20 --set-default
+
+      - name: Deploy source
+        run: sf project deploy start --target-org ci
+
+      - name: Run Apex tests
+        run: |
+          sf apex run test --target-org ci --code-coverage --wait 30 \
+            --result-format junit --output-dir test-results \
+            --test-level RunLocalTests
+
+      - name: Publish test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: apex-test-results
+          path: test-results
+
+      - name: Always delete the scratch org
+        if: always()
+        run: sf org delete scratch --target-org ci --no-prompt || true

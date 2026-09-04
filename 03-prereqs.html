@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Prerequisites Checklist &middot; AppExchange From Zero</title>
+<link rel="stylesheet" href="assets/site.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<button class="navtoggle" aria-label="Toggle navigation">&#9776; Contents</button>
+<div class="shell">
+<nav class="sidenav" id="sidenav">
+  <div class="brand">
+    <span class="brand-mark">SF</span>
+    <span class="brand-text">AppExchange<br><b>From Zero</b></span>
+  </div>
+  <ol class="navlist">
+    <li><a href="index.html">Start here</a></li>
+    <li><a href="01-big-picture.html">1 &middot; Big picture</a></li>
+    <li><a href="02-orgs.html">2 &middot; Org architecture</a></li>
+    <li class="here"><a href="03-prereqs.html">3 &middot; Prerequisites</a></li>
+    <li><a href="04-the-app.html">4 &middot; The app</a></li>
+    <li><a href="05-1gp.html">5 &middot; 1GP concepts</a></li>
+    <li><a href="06-1gp-lifecycle.html">6 &middot; 1GP lifecycle</a></li>
+    <li><a href="07-2gp.html">7 &middot; 2GP concepts</a></li>
+    <li><a href="08-2gp-build.html">8 &middot; 2GP build</a></li>
+    <li><a href="09-scratch-orgs.html">9 &middot; Scratch orgs</a></li>
+    <li><a href="10-compare.html">10 &middot; 1GP vs 2GP</a></li>
+    <li><a href="11-dependencies.html">11 &middot; Dependencies</a></li>
+    <li><a href="12-install.html">12 &middot; Install &amp; upgrade</a></li>
+    <li><a href="13-security.html">13 &middot; Security Review</a></li>
+    <li><a href="14-cicd.html">14 &middot; CI/CD</a></li>
+    <li><a href="15-appexchange.html">15 &middot; AppExchange</a></li>
+    <li><a href="16-day-plan.html">16 &middot; Day-by-day plan</a></li>
+    <li><a href="17-debugging.html">17 &middot; Debug drills</a></li>
+    <li><a href="17b-error-index.html">17b &middot; Error index</a></li>
+    <li><a href="18-backend.html">18 &middot; Behind the scenes</a></li>
+    <li><a href="19-commands.html">19 &middot; Command cheat sheet</a></li>
+    <li><a href="20-quiz.html">20 &middot; Knowledge test</a></li>
+  </ol>
+  <div class="navfoot">
+    <p>Local course site.<br>Regenerate with <code>python3 build.py</code></p>
+  </div>
+</nav>
+<main id="main">
+  <header class="pagehead">
+    <p class="kicker">Part 3</p>
+    <h1>Prerequisites Checklist</h1>
+  </header>
+  <p class="lead">Everything that must be true before you write a line of code. Tick the boxes &mdash; they
+persist in this browser.</p>
+
+<h2>A &middot; Salesforce prerequisites</h2>
+
+<h3>Accounts and orgs</h3>
+<ul class="check">
+<li><b>Developer Edition org #1</b> &mdash; will become your <b>Dev Hub</b>. <a href="https://developer.salesforce.com/signup">Sign up</a>. Use a plus-addressed email you control (<code>you+devhub@example.com</code>).</li>
+<li><b>Developer Edition org #2</b> &mdash; will own your <b>namespace</b>. Keep it empty.</li>
+<li><b>Trailhead account</b> (same email is fine) &mdash; useful for the ISV trails and for Trailhead Playgrounds as extra throwaway orgs.</li>
+<li><b>Partner Community access</b> &mdash; <i>only</i> if your company is a Salesforce partner. Ask your alliances/ISV ops team for access to <a href="https://partners.salesforce.com">partners.salesforce.com</a> rather than signing up yourself.</li>
+<li><b>Partner Business Org</b> access &mdash; needed for Security Review (<a href="13-security.html">Part 13</a>) and AppExchange listing (<a href="15-appexchange.html">Part 15</a>). Not needed to complete packaging, installs, or CI with free DE orgs.</li>
+</ul>
+
+<h3>Settings to enable, and where</h3>
+<div class="tablewrap">
+<table>
+<thead><tr><th>Setting</th><th>Org</th><th>Path</th><th>Why</th><th>Reversible?</th></tr></thead>
+<tbody>
+<tr><td>Dev Hub</td><td>DE #1 / PBO</td><td>Setup &rarr; Dev Hub &rarr; Enable Dev Hub</td><td>Scratch orgs + 2GP</td><td><b>No</b></td></tr>
+<tr><td>Unlocked &amp; 2nd-gen managed packages</td><td>Dev Hub</td><td>Setup &rarr; Dev Hub (same page)</td><td><code>sf package create</code> works</td><td>Yes</td></tr>
+<tr><td>Namespace registration</td><td>DE #2</td><td>Setup &rarr; Package Manager &rarr; Developer Settings &rarr; Edit</td><td>Managed packages require it</td><td><b>No</b></td></tr>
+<tr><td>Namespace Registry link</td><td>Dev Hub</td><td>App Launcher &rarr; Namespace Registries &rarr; Link Namespace</td><td>2GP versions can use the namespace</td><td>Yes (unlink)</td></tr>
+<tr><td>My Domain</td><td>any dev org</td><td>Setup &rarr; My Domain</td><td>Required for Lightning components in some contexts; already on in new orgs</td><td>&mdash;</td></tr>
+<tr><td>Environment Hub</td><td>PBO</td><td>Setup &rarr; Environment Hub</td><td>Provision partner test orgs</td><td>Yes</td></tr>
+<tr><td>License Management App</td><td>PBO</td><td>Request via Partner Community, then install</td><td>See installs / manage licences</td><td>&mdash;</td></tr>
+</tbody>
+</table>
+</div>
+
+<h3>Permissions you personally need</h3>
+<ul>
+<li>In the <b>Dev Hub</b>: <code>Create and Update Second-Generation Packages</code>, plus <b>API Enabled</b> and <b>Modify All Data</b> (or at least full access to <code>ScratchOrgInfo</code>). System Administrator covers all of this.</li>
+<li>In the <b>1GP packaging org</b>: System Administrator &mdash; uploading a package version is an admin action.</li>
+<li>In the <b>PBO</b>: the Publishing Console requires the <b>Manage Listings</b> / publishing permissions granted by your PBO admin. <span class="badge b-unk">Verify</span> exact permission names differ by console version.</li>
+</ul>
+
+<h2>B &middot; Local development prerequisites</h2>
+
+<h3>Install</h3>
+<div class="codewrap"><div class="codebar"><span>bash</span><button class="copy" type="button">Copy</button></div><pre class="code"><code># --- Core ---------------------------------------------------------------
+brew install git node            # Node Active LTS (22 or 24)
+npm install --global @salesforce/cli
+
+# --- Verify -------------------------------------------------------------
+git --version                    # &gt;= 2.30
+node --version                   # v22.x or v24.x
+sf --version                     # @salesforce/cli/2.x
+sf package --help                # packaging is often JIT; this is the real check
+
+# --- Optional but used later in this course ----------------------------
+npm install --global @salesforce/plugin-packaging        # only if `sf package --help` fails
+sf plugins install code-analyzer                         # Part 13 security scanning
+npm install --global prettier prettier-plugin-apex       # formatting
+
+# --- VS Code ------------------------------------------------------------
+code --install-extension salesforce.salesforcedx-vscode</code></pre></div>
+
+<div class="warn"><p><b>The one setup mistake that costs beginners a day:</b> having both <code>sfdx</code>
+(v7) and <code>sf</code> (v2) installed. Symptoms: an org authenticates but a later command says it is
+unknown; <code>sf org list</code> and <code>sfdx force:org:list</code> disagree. Fix:
+<code>npm uninstall --global sfdx-cli</code> (npm installs only; also remove any old OS installer)
+and re-run <code>sf org login web</code>.</p></div>
+
+<h3>Java</h3>
+<p>Not required for the CLI. Required for some static-analysis tooling (PMD / Graph Engine inside
+Salesforce Code Analyzer). If you hit a Java error in Part 13:
+<code>brew install --cask temurin@17</code> and set <code>JAVA_HOME</code>.
+<span class="badge b-unk">Verify</span> the Java version required by the Code Analyzer release you install.</p>
+
+<h3>Git &amp; GitHub</h3>
+<ul class="check">
+<li>GitHub account with SSH key configured (<code>ssh -T git@github.com</code> succeeds)</li>
+<li>You can create a private repo and push to it</li>
+<li>You understand: branch, commit, merge, rebase (basic), tag, pull request</li>
+<li>Your Git identity is set: <code>git config --global user.name</code> / <code>user.email</code></li>
+</ul>
+
+<h3>Authentication setup you will use</h3>
+<div class="tablewrap">
+<table>
+<thead><tr><th>Flow</th><th>Command</th><th>Use for</th><th>Stores</th></tr></thead>
+<tbody>
+<tr><td>Web (OAuth)</td><td><code>sf org login web --alias X</code></td><td>All interactive work</td><td>Refresh token in <code>~/.sfdx/&lt;username&gt;.json</code></td></tr>
+<tr><td>Device</td><td><code>sf org login device</code></td><td>Headless/remote shells</td><td>Same</td></tr>
+<tr><td>JWT bearer</td><td><code>sf org login jwt --client-id ... --jwt-key-file server.key --username ...</code></td><td><b>CI</b></td><td>Nothing interactive; uses a Connected App + certificate</td></tr>
+<tr><td>SFDX auth URL</td><td><code>sf org login sfdx-url --sfdx-url-file auth.txt</code></td><td>Quick CI bootstrap (less secure than JWT)</td><td>A single secret string &mdash; treat as a password</td></tr>
+</tbody>
+</table>
+</div>
+<div class="stop"><p><b>Never commit</b> <code>server.key</code>, an SFDX auth URL, or anything under
+<code>.sf/</code> / <code>.sfdx/</code>. Add them to <code>.gitignore</code> on day one. An auth URL leaked in a
+public repo is a full org takeover.</p></div>
+
+<h2>C &middot; Knowledge prerequisites</h2>
+<p>You do not need to be an expert in any of these. You need to know what each one is, and what it
+implies for packaging. If a row makes no sense, do the linked Trailhead-style reading before Day 3.</p>
+
+<div class="tablewrap">
+<table>
+<thead><tr><th>Topic</th><th>What you must be able to do</th><th>Why it matters for packaging</th></tr></thead>
+<tbody>
+<tr><td><b>Custom Objects &amp; Fields</b></td><td>Create an object, add fields, understand master-detail vs lookup, record types</td><td>Objects are the hardest components to change after release &mdash; field type changes are largely forbidden</td></tr>
+<tr><td><b>Apex</b></td><td>Write a class, a trigger, use collections, DML, SOQL, exceptions</td><td>Packaged Apex is hidden from subscribers and must compile in every subscriber org, forever</td></tr>
+<tr><td><b>SOQL / SOSL</b></td><td>Query with filters, relationships, bind variables</td><td>Dynamic SOQL built from strings is the #1 Security Review injection finding</td></tr>
+<tr><td><b>Apex tests</b></td><td><code>@isTest</code>, test data setup, assertions, <code>runAs</code></td><td><b>75% coverage is required to release a managed version.</b> Tests also run in subscriber orgs during some operations</td></tr>
+<tr><td><b>LWC</b></td><td>Component bundle (html/js/js-meta.xml), <code>@wire</code>, imperative Apex calls, events</td><td>Packaged components get namespace prefixes: <code>&lt;c-x&gt;</code> becomes <code>&lt;opskit-x&gt;</code> for subscribers</td></tr>
+<tr><td><b>Metadata / Metadata API</b></td><td>Understand that everything is a file; read a <code>-meta.xml</code></td><td>The package is literally a set of metadata components</td></tr>
+<tr><td><b>Permission Sets</b></td><td>Create one, grant object/field/Apex/tab access, assign it</td><td><b>The only correct way</b> to grant access to your app &mdash; you cannot edit subscriber profiles</td></tr>
+<tr><td><b>Profiles</b></td><td>Know what they are and why you must not depend on them</td><td>Profile settings in a managed package are only <i>suggestions</i> merged at install; subscribers own their profiles</td></tr>
+<tr><td><b>Custom Metadata Types</b></td><td>Create a CMDT, add records, query in Apex</td><td>Packageable <b>configuration</b>: rows can ship with the package and are deployable/upgradeable</td></tr>
+<tr><td><b>Custom Settings</b></td><td>Hierarchy vs list; when to use over CMDT</td><td>Legacy config mechanism; still needed for per-user/per-profile toggles</td></tr>
+<tr><td><b>Custom Labels</b></td><td>Create and reference from Apex/LWC</td><td>Translation and the ability to change UI text without changing code</td></tr>
+<tr><td><b>Flows</b></td><td>Build a simple record-triggered flow</td><td>Packageable, but subscribers cannot edit packaged flows &mdash; a real design constraint</td></tr>
+<tr><td><b>Validation rules</b></td><td>Write one</td><td>Packaged rules fire in the subscriber org and can block <i>their</i> integrations &mdash; be conservative</td></tr>
+<tr><td><b>Named Credentials</b></td><td>Know that they externalise endpoints + auth</td><td>Security Review effectively requires them for callouts instead of hard-coded endpoints/secrets</td></tr>
+<tr><td><b>Sharing &amp; CRUD/FLS</b></td><td><code>with sharing</code>, <code>WITH USER_MODE</code>, <code>Security.stripInaccessible</code>, <code>isAccessible()</code></td><td>The single biggest Security Review category</td></tr>
+<tr><td><b>Git</b></td><td>Branch, PR, tag, resolve a conflict</td><td>In 2GP, Git <i>is</i> the package</td></tr>
+<tr><td><b>CI/CD</b></td><td>Read a YAML workflow; understand secrets</td><td>Version creation must be automated to be reliable</td></tr>
+</tbody>
+</table>
+</div>
+
+<h2>D &middot; Decide these before Day 1 (write them down)</h2>
+<div class="tablewrap">
+<table>
+<thead><tr><th>Decision</th><th>Why it is hard to change later</th><th>My answer</th></tr></thead>
+<tbody>
+<tr><td>Namespace</td><td><b>Permanent, global, org-bound.</b></td><td><code>________</code> (suggestion: <code>opskit</code> + 2 random digits, since short names are taken)</td></tr>
+<tr><td>Which org is the Dev Hub</td><td>Owns package identity forever</td><td><code>________</code></td></tr>
+<tr><td>Package name(s)</td><td>Renameable, but appears in subscriber Setup</td><td><code>Ops Toolkit Core</code>, <code>Ops Toolkit Field Ops</code></td></tr>
+<tr><td>Object API names</td><td>Effectively permanent after release</td><td><code>Service_Request__c</code>, &hellip;</td></tr>
+<tr><td>Repo layout</td><td>Multi-package monorepo vs repo-per-package</td><td>Monorepo (this course)</td></tr>
+</tbody>
+</table>
+</div>
+
+<h2>Final gate</h2>
+<ul class="check">
+<li>All installs verified with the version commands above</li>
+<li>Both DE orgs signed up and logged into at least once in the browser</li>
+<li><code>sf org login web</code> succeeded for both, aliases <code>devhub</code> and <code>nsorg</code></li>
+<li>Dev Hub enabled + 2GP/unlocked packages enabled</li>
+<li>GitHub repo created (private), empty DX project pushed</li>
+<li><code>.gitignore</code> contains <code>.sf/</code>, <code>.sfdx/</code>, <code>*.key</code>, <code>node_modules/</code></li>
+<li>Namespace candidate chosen (not yet registered &mdash; that is Stage 1)</li>
+</ul>
+
+  <nav class="pager"><a class="prev" href="02-orgs.html"><span>Previous</span>2 &middot; Org architecture</a><a class="next" href="04-the-app.html"><span>Next</span>4 &middot; The app</a></nav>
+  <footer class="sitefoot">
+    <p>Built as a personal learning course. Salesforce behaviour changes between releases &mdash;
+    always confirm against <a href="https://developer.salesforce.com/docs/atlas.en-us.sfdx_dev.meta/sfdx_dev/">Salesforce DX Developer Guide</a>
+    and the <a href="https://developer.salesforce.com/docs/atlas.en-us.packagingGuide.meta/packagingGuide/">ISVforce / Packaging guides</a>
+    before you rely on a detail in production.</p>
+  </footer>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

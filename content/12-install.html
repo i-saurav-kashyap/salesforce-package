@@ -1,0 +1,208 @@
+<p class="lead">You are the customer now. This page makes you install, break, upgrade, fail, uninstall
+and reinstall your own product &mdash; because every one of those is a support ticket you will otherwise
+receive from a real customer.</p>
+
+<h2>Installation</h2>
+
+<h3>The flow</h3>
+[[diagram]]
+ Customer org
+      │
+      ▼
+ Install URL:  https://login.salesforce.com/packaging/installPackage.apexp?p0=04t…
+      │        (sandbox:  https://test.salesforce.com/packaging/…)
+      ▼
+ 1. Salesforce validates the version   → is it released? does the key match? edition/features OK?
+      ▼
+ 2. Dependency resolution              → are required packages present? if not: FAIL, naming the 04t
+      ▼
+ 3. Component preview + security choice → Admins only / All users / Specific profiles
+      ▼
+ 4. Metadata installation              → objects, fields, layouts, labels, tabs, permission sets,
+      │                                  CMDT types AND their packaged records
+      ▼
+ 5. Apex installation                  → classes compiled in the subscriber org;
+      │                                  packaged tests may be run (esp. production installs)
+      ▼
+ 6. Post-install script (InstallHandler) → your Apex runs, as a special "package ghost" context
+      ▼
+ 7. Licence record created in YOUR PBO via the LMA
+      ▼
+ 8. Admin does post-install config     → assign permission sets, edit CMDT, add the app to profiles
+      ▼
+ 9. Users use the app
+[[/diagram]]
+
+<h3>Do it</h3>
+[[code bash]]
+# 1. A clean, customer-like org
+sf org create scratch -f config/customer-like-scratch-def.json \
+  -a customer1 -d 2 --no-namespace --target-dev-hub devhub
+
+# 2. Install exactly as a customer would (CLI == clicking the URL)
+sf package install --package 04t...CORE --installation-key "LearnPackaging123" \
+  --target-org customer1 --wait 20 --publish-wait 20 --no-prompt
+
+# 3. Confirm
+sf package installed list --target-org customer1
+sf org open --target-org customer1
+[[/code]]
+<div class="tablewrap">
+<table>
+<thead><tr><th>Flag</th><th>What it does</th></tr></thead>
+<tbody>
+<tr><td><code>--wait 20</code></td><td>Poll the <code>PackageInstallRequest</code> for up to 20 minutes instead of returning immediately</td></tr>
+<tr><td><code>--publish-wait 20</code></td><td>Wait for the version to finish becoming available for installation (newly created versions need a moment)</td></tr>
+<tr><td><code>--security-type</code></td><td><code>AdminsOnly</code> (default) or <code>AllUsers</code> &mdash; the profile-access choice from the UI</td></tr>
+<tr><td><code>--upgrade-type</code></td><td>Behaviour for deprecated components on upgrade: <code>DeprecateOnly</code> / <code>Mixed</code> / <code>Delete</code>. <span class="badge b-unk">Verify</span> before using anything but the default</td></tr>
+<tr><td><code>--no-prompt</code></td><td>Skip the &ldquo;this package contains Apex&rdquo; confirmation &mdash; required in CI</td></tr>
+</tbody>
+</table>
+</div>
+
+<h3>The post-install script</h3>
+<p>An Apex class implementing <code>InstallHandler</code>, nominated on the package (1GP: Package Manager;
+2GP: <code>sf package update --package X --apex-post-install-script Y</code>
+<span class="badge b-unk">Verify</span> flag name in your CLI version). It runs after components land, and
+is the right place to seed configuration or migrate data between versions.</p>
+[[code apex]]
+global with sharing class OpsPostInstall implements InstallHandler {
+    global void onInstall(InstallContext context) {
+        if (context.previousVersion() == null) {
+            // FIRST install: seed anything the app needs to run.
+            seedDefaults();
+        } else if (context.previousVersion().compareTo(new Version(1, 1)) < 0) {
+            // UPGRADE from anything older than 1.1: run the one-off migration.
+            backfillDueDates();
+        }
+        if (context.isUpgrade() || context.isPush()) {
+            // ...
+        }
+    }
+    private void seedDefaults() { /* ... */ }
+    private void backfillDueDates() { /* ... */ }
+}
+[[/code]]
+<div class="warn"><p><b>Things that bite in post-install scripts:</b> they run as a special system user
+(often called the &ldquo;package ghost&rdquo;) whose behaviour differs from a normal admin; they are subject to
+governor limits; they must be resilient to <b>any</b> starting state (some customers upgrade from 1.0 to
+2.0 directly); and a failure there is a failed install for the customer. Make them idempotent, small,
+and asynchronous where possible.</p></div>
+
+<h3>The test matrix &mdash; run all seven</h3>
+<div class="tablewrap">
+<table>
+<thead><tr><th>#</th><th>Test</th><th>How</th><th>Expected</th></tr></thead>
+<tbody>
+<tr><td>1</td><td><b>Fresh install</b></td><td>Clean org, install Core</td><td>Success; components present with <code>opskit__</code> prefix</td></tr>
+<tr><td>2</td><td><b>Install without dependency</b></td><td>Clean org, install Field Ops first</td><td>Fail, naming the required <code>04t</code>. Read that message carefully &mdash; it is what your customer will paste to support</td></tr>
+<tr><td>3</td><td><b>Install with dependency</b></td><td>Core then Field Ops</td><td>Success</td></tr>
+<tr><td>4</td><td><b>Upgrade</b></td><td>Install 1.0 (released), then 1.1</td><td>Success; <b>records created under 1.0 still exist with their data</b></td></tr>
+<tr><td>5</td><td><b>Failed upgrade</b></td><td>Add a validation rule that existing data violates, or a required field with no default, then upgrade</td><td>Upgrade fails and <b>rolls back</b>. This is the single most valuable rehearsal on this page</td></tr>
+<tr><td>6</td><td><b>Uninstall</b></td><td>Setup &rarr; Installed Packages &rarr; Uninstall</td><td>Success only if nothing depends on it; Salesforce offers to export the data first</td></tr>
+<tr><td>7</td><td><b>Reinstall</b></td><td>Install again after uninstalling</td><td>Success, but <b>data is not restored</b> unless you import the export file</td></tr>
+</tbody>
+</table>
+</div>
+<div class="tip"><p><b>Test 5 in detail (do not skip it).</b> Ship 1.0. Create a Service Request with a
+blank <code>Priority__c</code>. Now build 1.1 where <code>Priority__c</code> is <code>required</code>. Upgrade. Watch what
+happens. Then reason about which customers would have hit it and how you would have found out.
+This is the class of bug that generates a Sev-1 at 2am.</p></div>
+
+<h3>What uninstall actually does</h3>
+<ul>
+<li>Removes your components from the org.</li>
+<li>Offers an <b>export of the data</b> stored in your objects (a zip of CSVs, available for a limited time)
+&mdash; the customer's data is theirs.</li>
+<li>Refuses if another installed package depends on yours.</li>
+<li><span class="badge b-unk">Verify</span> some component types leave residue or block uninstall
+(e.g. objects referenced by the subscriber's own custom fields, flows, or reports). Test with a subscriber
+who has built on top of your objects &mdash; that is the realistic case.</li>
+</ul>
+
+<hr>
+
+<h2>Upgrades</h2>
+
+<h3>Build the four versions</h3>
+<div class="tablewrap">
+<table>
+<thead><tr><th>Version</th><th>Change</th><th>What it teaches</th></tr></thead>
+<tbody>
+<tr><td><b>1.0</b></td><td>Initial product</td><td>The baseline lineage</td></tr>
+<tr><td><b>1.1</b></td><td><b>Add</b>: <code>Resolution_Notes__c</code> field, a new <code>global</code> method, a new label, a new permission set entry</td><td>Purely additive upgrades are safe and boring &mdash; the goal</td></tr>
+<tr><td><b>1.2</b></td><td><b>Modify</b>: change default SLA in the CMDT record, change a label's text, add a picklist value, tighten a validation rule</td><td>Which of these overwrite subscriber changes, and which do not</td></tr>
+<tr><td><b>2.0</b></td><td><b>Major</b>: a new object <code>Crew__c</code>, a new LWC, a deprecated <code>global</code> method (<code>@Deprecated</code>, not deleted)</td><td>Big features without breaking anyone</td></tr>
+</tbody>
+</table>
+</div>
+[[code bash]]
+# for each version: edit sfdx-project.json first
+#   "versionNumber": "1.1.0.NEXT",
+#   "ancestorVersion": "1.0.0.1",
+sf package version create --package "Ops Toolkit Core" --code-coverage \
+  --installation-key "LearnPackaging123" --wait 30
+sf package version promote --package "Ops Toolkit Core@1.1.0-1"
+sf package install --package 04t...1_1 --target-org customer1 --wait 20 --no-prompt \
+  --installation-key "LearnPackaging123"
+git tag -a core-v1.1.0 -m "Ops Toolkit Core 1.1.0" && git push --tags
+[[/code]]
+
+<h3>What can and cannot change &mdash; upgrade edition</h3>
+<div class="tablewrap">
+<table>
+<thead><tr><th>Change</th><th>Allowed</th><th>What subscribers experience</th></tr></thead>
+<tbody>
+<tr><td>Add object / field / class / LWC / label / permission set</td><td>✔</td><td>Appears after upgrade. New fields are blank on existing records</td></tr>
+<tr><td>Add a <code>global</code> method</td><td>✔</td><td>Available to their code</td></tr>
+<tr><td>Change <code>public</code> Apex internals</td><td>✔</td><td>Invisible</td></tr>
+<tr><td>Add a picklist value</td><td>✔</td><td>Appears. Restricted picklists + subscriber-added values need care <span class="badge b-unk">Verify</span></td></tr>
+<tr><td>Change a field label / help text</td><td>✔</td><td>Updated &mdash; unless the subscriber renamed it, in which case their change is generally preserved <span class="badge b-unk">Verify</span></td></tr>
+<tr><td>Make a field <code>required</code></td><td>✔ technically</td><td><b>Dangerous</b> &mdash; existing blank data can fail the upgrade or block their edits</td></tr>
+<tr><td>Add a validation rule</td><td>✔</td><td><b>Dangerous</b> &mdash; can break their integrations immediately</td></tr>
+<tr><td>Delete a <code>global</code> method or class</td><td>✘</td><td>Version create fails at build time</td></tr>
+<tr><td>Rename an object/field API name</td><td>✘</td><td>&mdash;</td></tr>
+<tr><td>Change a field type (e.g. Text &rarr; Number)</td><td>✘ mostly</td><td>&mdash;</td></tr>
+<tr><td>Remove a component from the package</td><td>✔ (you can stop shipping it)</td><td>The component <b>stays</b> in their org, orphaned and no longer upgraded. This is why you deprecate rather than delete</td></tr>
+</tbody>
+</table>
+</div>
+
+<h3>How each thing behaves on upgrade</h3>
+<div class="tablewrap">
+<table>
+<thead><tr><th>Element</th><th>Upgrade behaviour</th></tr></thead>
+<tbody>
+<tr><td><b>Customer data</b></td><td>Never touched by the upgrade itself. Only your post-install script can modify it &mdash; deliberately</td></tr>
+<tr><td><b>Apex classes</b></td><td>Replaced wholesale with your new version and recompiled in the subscriber org. If compilation fails against their org, the upgrade fails</td></tr>
+<tr><td><b>Database fields</b></td><td>New fields added (blank). Existing fields keep their data. Removed fields are <b>not</b> dropped</td></tr>
+<tr><td><b>Deleted metadata</b></td><td>Stays behind in the subscriber org as an orphan. Plan deprecation, not deletion</td></tr>
+<tr><td><b>Permission sets</b></td><td>Your changes are applied to the packaged permission set. Assignments the admin made are preserved. Access the admin added to <i>their own</i> permission sets stays theirs</td></tr>
+<tr><td><b>Profiles</b></td><td>Packaged profile settings are merged as suggestions on <b>first install</b> only; do not rely on them &mdash; ship permission sets</td></tr>
+<tr><td><b>Custom Metadata records</b></td><td>Depends on protected/managed state and whether the subscriber edited the row. <span class="badge b-unk">Verify</span> per field; test it explicitly: edit the row as the customer, then upgrade, then look</td></tr>
+<tr><td><b>Layouts</b></td><td>Once a subscriber has customised a packaged layout, later package changes to that layout typically do <b>not</b> appear for them. New fields must be added by the admin. <span class="badge b-doc">Documented</span> pattern for many component types: subscriber customisation wins</td></tr>
+<tr><td><b>Flows</b></td><td>Packaged flows are replaced by the new version; subscribers cannot edit them</td></tr>
+<tr><td><b>Dependencies</b></td><td>Must be satisfied at the new version's declared level <b>before</b> the upgrade &mdash; upgrade the dependency first</td></tr>
+<tr><td><b>Licences</b></td><td>Managed via the LMA; a version upgrade does not change entitlement by itself</td></tr>
+</tbody>
+</table>
+</div>
+
+<h3>Push upgrades</h3>
+<p>Salesforce lets ISVs <b>push</b> a version to subscriber orgs without the admin clicking anything &mdash;
+used for patches and critical fixes. It is powerful and correspondingly restricted.
+<span class="badge b-unk">Verify</span> which versions are eligible (typically patch-level upgrades),
+how to schedule a push, and what a subscriber can opt out of, in the current ISVforce Guide before ever
+planning one. Treat a push as a production change to <i>someone else's</i> org &mdash; because it is.</p>
+
+<h3>Upgrade rehearsal checklist (before every release)</h3>
+<ul class="check">
+<li>Fresh install of the new version into a clean org: passes</li>
+<li>Upgrade from the <b>previous released</b> version, with realistic data present: passes</li>
+<li>Upgrade from the <b>oldest supported</b> version (customers skip versions): passes</li>
+<li>Upgrade with a <b>non-admin</b> user actively using the app afterwards: still works</li>
+<li>Upgrade in an org where the admin <b>customised</b> your layouts/permission sets/CMDT rows: behaves as documented</li>
+<li>Dependency versions upgraded first, in order</li>
+<li>Post-install script tested for: first install, upgrade from N-1, upgrade from N-3</li>
+<li>Release notes list the <code>04t</code>, the dependencies, and any manual admin step</li>
+</ul>

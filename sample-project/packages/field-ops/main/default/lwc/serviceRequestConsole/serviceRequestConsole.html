@@ -1,0 +1,38 @@
+<template>
+    <lightning-card title="Open Service Requests" icon-name="custom:custom18">
+        <lightning-button
+            slot="actions"
+            label="New Request"
+            variant="brand"
+            onclick={handleOpenModal}></lightning-button>
+
+        <div class="slds-p-horizontal_small">
+            <template lwc:if={isLoading}>
+                <lightning-spinner alternative-text="Loading"></lightning-spinner>
+            </template>
+
+            <template lwc:if={errorMessage}>
+                <div class="slds-text-color_error slds-p-vertical_small">{errorMessage}</div>
+            </template>
+
+            <template lwc:if={hasRows}>
+                <lightning-datatable
+                    key-field="Id"
+                    data={rows}
+                    columns={columns}
+                    onrowselection={handleSelection}></lightning-datatable>
+            </template>
+
+            <template lwc:if={isEmpty}>
+                <p class="slds-p-vertical_medium slds-text-color_weak">No open requests. Nice.</p>
+            </template>
+        </div>
+
+        <div slot="footer">
+            <lightning-button
+                label="Mark selected complete"
+                disabled={nothingSelected}
+                onclick={handleComplete}></lightning-button>
+        </div>
+    </lightning-card>
+</template>

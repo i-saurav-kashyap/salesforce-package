@@ -1,0 +1,155 @@
+<p class="lead">2GP exists so that this page is possible. Once Git is the source of truth, releasing is
+just a job that runs commands &mdash; and the discipline that keeps 1GP shops awake at night becomes a YAML
+file.</p>
+
+<h2>The pipeline</h2>
+[[diagram]]
+ Developer
+    │  local: sf project deploy start · sf apex run test · sf code-analyzer run
+    ▼
+ Git branch  ──push──►  Pull Request
+                            │
+                     ┌──────┴──────────────────────────────────┐  GitHub Actions
+                     │ 1. Static analysis (Code Analyzer)      │
+                     │ 2. Create scratch org (from Dev Hub)    │
+                     │ 3. Deploy source                        │
+                     │ 4. Run all Apex tests + coverage        │
+                     │ 5. Delete scratch org (always)          │
+                     └──────┬──────────────────────────────────┘
+                            │ green
+                            ▼
+                        Merge to main
+                            │
+                     ┌──────┴──────────────────────────────────┐  GitHub Actions (tag / manual)
+                     │ 6. sf package version create (BETA)     │
+                     │ 7. Install into clean NON-namespaced org│
+                     │ 8. Run tests in the installed org       │
+                     │ 9. Manual approval                      │
+                     │10. sf package version promote (RELEASE) │
+                     │11. Commit packageAliases + tag          │
+                     └──────┬──────────────────────────────────┘
+                            ▼
+                    QA org → UAT/demo org → Security Review → AppExchange
+[[/diagram]]
+
+<h2>Where each thing runs</h2>
+<div class="tablewrap">
+<table>
+<thead><tr><th>Runs</th><th>What</th><th>Why there</th></tr></thead>
+<tbody>
+<tr><td><b>Locally</b></td><td>Deploy to your scratch org, run tests, run the scanner, Jest tests, Prettier</td><td>Fast feedback. Never let CI be the first place a test runs</td></tr>
+<tr><td><b>GitHub Actions</b></td><td>Orchestration: auth, org creation, deploy, test, package version create/install/promote, cleanup</td><td>Reproducible, auditable, no laptop involved</td></tr>
+<tr><td><b>Salesforce</b></td><td>The actual work: org provisioning, metadata deploy, Apex compilation, test execution, package build</td><td>CI is only a driver &mdash; every heavy step happens in Salesforce</td></tr>
+</tbody>
+</table>
+</div>
+
+<h2>Authentication in CI &mdash; JWT, not passwords</h2>
+<p>Interactive OAuth cannot work in a runner. The supported answer is the <b>JWT bearer flow</b>: a
+Connected App in the Dev Hub trusts a certificate you hold.</p>
+<ol class="steps">
+<li><b>Generate a key pair</b> (keep <code>server.key</code> out of Git, forever):
+[[code bash]]
+openssl req -x509 -sha256 -nodes -days 3650 -newkey rsa:2048 \
+  -keyout server.key -out server.crt \
+  -subj "/CN=OpsToolkitCI"
+[[/code]]
+</li>
+<li><b>Create a Connected App</b> in the Dev Hub: Setup &rarr; App Manager &rarr; New Connected App.
+Enable OAuth, callback URL <code>http://localhost:1717/OauthRedirect</code>, scopes
+<code>api</code>, <code>refresh_token offline_access</code>, <b>Use digital signatures</b> &rarr; upload
+<code>server.crt</code>. Save the <b>Consumer Key</b>.</li>
+<li><b>Pre-authorise your user</b>: Manage &rarr; Edit Policies &rarr; Permitted Users =
+<i>Admin approved users are pre-authorized</i>, then assign a profile/permission set that includes your
+CI user.</li>
+<li><b>Test it locally before trusting CI:</b>
+[[code bash]]
+sf org login jwt --client-id <CONSUMER_KEY> \
+  --jwt-key-file server.key --username ci-user@example.com \
+  --set-default-dev-hub --alias devhub
+[[/code]]
+</li>
+<li><b>Store secrets</b> in GitHub &rarr; Settings &rarr; Secrets and variables &rarr; Actions:
+<code>DEVHUB_CLIENT_ID</code>, <code>DEVHUB_USERNAME</code>, <code>DEVHUB_JWT_KEY</code> (the whole PEM),
+<code>PACKAGE_INSTALL_KEY</code>.</li>
+</ol>
+<div class="stop"><p><b>Secret hygiene, non-negotiable:</b> the private key never enters the repo; the
+workflow writes it to a file and deletes it in the same step; secrets are never <code>echo</code>ed; use
+environment protection rules so only the release workflow can read release secrets. A leaked Dev Hub
+key means someone else can publish package versions under your identity.</p></div>
+
+<h2>Workflow 1 &mdash; PR validation</h2>
+[[file sample-project/.github/workflows/pr-validation.yml yaml]]
+<div class="tablewrap">
+<table>
+<thead><tr><th>Step</th><th>Talks to</th><th>Fails when</th></tr></thead>
+<tbody>
+<tr><td>Install CLI</td><td>npm</td><td>Registry hiccup; pin a version if you need determinism</td></tr>
+<tr><td>JWT login</td><td>Dev Hub</td><td>Key/cert mismatch, user not pre-authorised, wrong username</td></tr>
+<tr><td>Code Analyzer</td><td>Local files</td><td>A finding above your threshold</td></tr>
+<tr><td>Create scratch org</td><td>Dev Hub</td><td><b>Daily/active scratch org limit</b> &mdash; the most common CI failure</td></tr>
+<tr><td>Deploy source</td><td>Scratch org</td><td>Compile errors, missing dependencies</td></tr>
+<tr><td>Apex tests</td><td>Scratch org</td><td>Failures or coverage below your bar</td></tr>
+<tr><td>Delete scratch org</td><td>Dev Hub</td><td>Runs with <code>if: always()</code> so a failed job does not leak an org</td></tr>
+</tbody>
+</table>
+</div>
+
+<h2>Workflow 2 &mdash; build, install-test, promote</h2>
+[[file sample-project/.github/workflows/package-release.yml yaml]]
+<div class="note"><p><b>The install-test step is the point of this workflow.</b> Creating a version proves
+it compiles. Installing it into a clean non-namespaced org and running the tests <i>there</i> proves it
+works the way a customer will experience it. Skipping that step is how &ldquo;it built fine&rdquo; becomes a
+support escalation.</p></div>
+
+<h3>Design choices worth copying</h3>
+<ul>
+<li><b>Promotion is manual and explicit</b> (<code>workflow_dispatch</code> input, or a protected
+environment requiring approval). Promotion is irreversible &mdash; it should never happen by accident on a
+merge.</li>
+<li><b>Beta on every merge, release on a tag.</b> Betas are cheap; use them constantly.</li>
+<li><b>The workflow commits <code>sfdx-project.json</code></b> so the new <code>04t</code> aliases are recorded
+in Git. Without this, the repo forgets which commit became which version.</li>
+<li><b>Every org is deleted in an <code>always()</code> step.</b> Leaked scratch orgs exhaust your limits and
+then block everyone.</li>
+<li><b>Version numbers are bumped in a PR</b>, not by CI. Deciding &ldquo;this is 1.1 not 1.0.1&rdquo; is a human
+decision about compatibility.</li>
+</ul>
+
+<h2>Branch and version strategy</h2>
+<div class="tablewrap">
+<table>
+<thead><tr><th>Branch</th><th>Builds</th><th>Dependencies</th><th>Ancestry</th></tr></thead>
+<tbody>
+<tr><td><code>feature/*</code></td><td>Nothing (PR validation only)</td><td><code>LATEST</code></td><td>&mdash;</td></tr>
+<tr><td><code>main</code></td><td>Beta on merge</td><td><code>LATEST</code></td><td>Ancestor = last released</td></tr>
+<tr><td><code>release/1.1</code></td><td>Beta &rarr; approved &rarr; promote</td><td><b>Pinned</b></td><td>Ancestor = 1.0.x</td></tr>
+<tr><td><code>hotfix/1.0.1</code></td><td>Patch version</td><td>Pinned to what 1.0 used</td><td>Ancestor = 1.0.0</td></tr>
+</tbody>
+</table>
+</div>
+<p>Tag every promoted version: <code>git tag -a core-v1.1.0 -m "04t..."</code>. The tag message containing
+the <code>04t</code> has saved more incidents than any dashboard.</p>
+
+<h2>What to add next (in order of value)</h2>
+<ol>
+<li><b>Jest tests for LWC</b> (<code>npm run test:unit</code>) in the PR job &mdash; fast and catches real bugs.</li>
+<li><b>Prettier + ESLint</b> as a pre-commit hook, so formatting never appears in review diffs.</li>
+<li><b>An upgrade-test job</b>: create an org, install the <i>previous released</i> version, seed data,
+install the new version, assert the data survived. This is the highest-value job in an ISV pipeline and
+almost nobody has it.</li>
+<li><b>Scheduled dependency check</b>: nightly job that reports if a dependency has a newer released
+version.</li>
+<li><b>Release notes generation</b> from the commit range between tags.</li>
+</ol>
+
+<h2>Verification</h2>
+<ul class="check">
+<li>JWT login works locally with the same key CI will use</li>
+<li>A PR triggers validation and it goes green</li>
+<li>A deliberately failing test blocks the PR</li>
+<li>The release workflow produces a <code>04t</code> and installs it into a clean org</li>
+<li>Scratch orgs are always deleted, even when the job fails</li>
+<li>Promotion requires a human action</li>
+<li>The repo contains the alias for every version you have built</li>
+</ul>
